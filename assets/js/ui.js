@@ -26,6 +26,7 @@
   // Top-level category navigation; the Drinks group reveals its sub-categories.
   const DRINKS_GROUP = { id: 'g:drinks', name: 'Drinks', icon: '🥤', accent: '#2e7d5b', subs: ['juice', 'smoothies', 'coffee', 'lemonade'] };
   const CAT_NAV = ['banh-mi', 'pho-bun', 'dry-noodles', 'rice', 'sizzling', DRINKS_GROUP, 'combo', 'bakery'];
+  const FAVORITE_IDS = ['bm-trad-pork', 'bm-roast-pork', 'ph-raw-beef', 'ph-bun-bo-hue', 'rc-pork-chop', 'cf-milk', 'jc-sugarcane', 'combo-drink'];
   const effectiveCat = () => (ui.category === 'g:drinks' ? ui.drinkSub : ui.category);
 
   /* ---- item promo preview (reuses the pricing engine) -------------------- */
@@ -72,6 +73,7 @@
     ui.reportFrom = S.dayKey(Date.now());
     ui.reportTo = S.dayKey(Date.now());
     ui.historyDay = S.dayKey(Date.now());
+    applyModeClasses();
     S.subscribe(renderDynamic);
     renderTopbar();
     render();
@@ -82,8 +84,13 @@
   // On the register we surgically refresh ONLY the cart panel, leaving the menu
   // grid (and its images) and the top bar untouched — no flicker, no "reload".
   function renderDynamic() {
+    applyModeClasses();
     if (ui.view === 'register' && document.getElementById('pos-cart')) { refreshCart(); return; }
     renderTopbar(); render();
+  }
+  function applyModeClasses() {
+    document.body.classList.toggle('training-mode', S.isTrainingMode());
+    document.body.classList.toggle('touch-mode', !!S.getConfig().touchMode);
   }
   function refreshCart() {
     const el = $('#pos-cart'); if (!el) return;
@@ -130,7 +137,9 @@
     const inAdmin = ADMIN_VIEWS.includes(ui.view);
     const right = inAdmin
       ? `<button class="tb-action" onclick="UI.exitAdmin()">🖥️ Register</button>`
-      : `<button class="tb-action promo" title="Active promotions" onclick="UI.openPromoInfo()">🏷️ <span>Promos</span>${activePromos().length ? `<span class="tb-badge">${activePromos().length}</span>` : ''}</button>
+      : `<button class="tb-action mode ${S.isTrainingMode() ? 'on' : ''}" title="Training sales do not count in reports" onclick="UI.toggleTrainingMode()">🎓 <span>${S.isTrainingMode() ? 'Training ON' : 'Training'}</span></button>
+         <button class="tb-action touch ${c.touchMode ? 'on' : ''}" title="Bigger tablet/counter controls" onclick="UI.toggleTouchMode()">👆 <span>${c.touchMode ? 'Touch ON' : 'Touch'}</span></button>
+         <button class="tb-action promo" title="Active promotions" onclick="UI.openPromoInfo()">🏷️ <span>Promos</span>${activePromos().length ? `<span class="tb-badge">${activePromos().length}</span>` : ''}</button>
          <button class="tb-action" title="Transaction history" onclick="UI.go('orders')">📑 <span>History</span></button>
          <button class="tb-action" title="Reprint" onclick="UI.reprintLast()">🖨 <span>Reprint</span></button>
          <button class="tb-action key" onclick="UI.openAdmin()">🔑 <span>Admin</span></button>`;
@@ -153,6 +162,20 @@
       ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   }
   function renderClock() { const el = $('#tb-clock'); if (el) el.textContent = nowLabel(); }
+
+  function toggleTrainingMode() {
+    S.setTrainingMode(!S.isTrainingMode());
+    renderTopbar();
+    render();
+    toast(S.isTrainingMode() ? 'Training mode on — sales are not counted' : 'Training mode off');
+  }
+  function toggleTouchMode() {
+    const next = !S.getConfig().touchMode;
+    S.updateConfig({ touchMode: next });
+    renderTopbar();
+    render();
+    toast(next ? 'Touch mode on' : 'Touch mode off');
+  }
 
   function render() {
     const v = $('#view'); if (!v) return;
@@ -306,6 +329,8 @@
     return `
       <div class="pos">
         <div class="pos-menu">
+          ${renderTrainingBanner()}
+          ${renderQuickPicks()}
           ${renderPromoBanner()}
           ${renderCatBar()}
           ${renderSearchBar()}
@@ -314,6 +339,58 @@
         </div>
         <div id="pos-cart" class="pos-cart">${renderCart()}</div>
       </div>`;
+  }
+
+  function renderTrainingBanner() {
+    if (!S.isTrainingMode()) return '';
+    return `<div class="training-banner">
+      <strong>Training mode is ON</strong>
+      <span>Practice sales print as training receipts and are excluded from revenue, till, top sellers and staff reports.</span>
+    </div>`;
+  }
+
+  function topRowToItem(row) {
+    if (row.itemId) {
+      const byId = S.findItem(row.itemId);
+      if (byId) return byId;
+    }
+    return S.getMenu().find((m) => S.displayName(m) === row.name || m.name === row.name) || null;
+  }
+
+  function quickPickItems() {
+    const today = S.dayKey(Date.now());
+    const rows = S.report(shiftDay(-6), today).itemRows;
+    const seen = new Set();
+    const picks = [];
+    const add = (item, sold) => {
+      if (!item || seen.has(item.id)) return;
+      seen.add(item.id);
+      picks.push({ item, sold: sold || 0 });
+    };
+    rows.forEach((row) => add(topRowToItem(row), row.qty));
+    FAVORITE_IDS.forEach((id) => add(S.findItem(id), 0));
+    return picks.slice(0, 8);
+  }
+
+  function renderQuickPicks() {
+    const picks = quickPickItems();
+    if (!picks.length) return '';
+    return `<div class="quick-picks">
+      <div class="qp-head">
+        <strong>Favorites / Top sellers</strong>
+        <span>Last 7 days + house picks</span>
+      </div>
+      <div class="qp-list">
+        ${picks.map(({ item, sold }) => {
+          const off = item.available === false;
+          return `<button class="qp-tile ${off ? 'off' : ''}" ${off ? 'disabled' : ''} onclick="UI.addItem('${item.id}')">
+            <span>${esc(item.name)}</span>
+            <b>${money(item.price)}</b>
+            <small>${sold ? sold + ' sold' : 'favorite'}</small>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`;
   }
 
   function renderCatBar() {
@@ -393,6 +470,8 @@
             ${promo ? `<span class="m-badge">−${promo.perUnit ? Math.round(promo.perUnit / item.price * 100) : 15}%</span>` : ''}
             ${item.takeawayOnly ? `<span class="m-tag takeaway">Take-away</span>` : ''}
             ${soldOut ? `<span class="m-tag sold">Sold out</span>` : ''}
+            <button class="m-sold-toggle ${soldOut ? 'restore' : ''}" title="${soldOut ? 'Mark available' : 'Mark sold out'}"
+              onclick="UI.quickSoldOut(event,'${item.id}')">${soldOut ? 'Back' : 'Sold out'}</button>
           </div>
           <div class="m-body">
             <div class="m-name">${esc(item.name)}</div>
@@ -437,6 +516,9 @@
                 <button onclick="UI.inc('${line.uid}',-1)">−</button>
                 <span>${line.qty}</span>
                 <button onclick="UI.inc('${line.uid}',1)">+</button>
+              </div>
+              <div class="qty-shortcuts" aria-label="Quick quantity">
+                ${[2, 3, 5].map((n) => `<button class="${line.qty === n ? 'on' : ''}" onclick="UI.setQty('${line.uid}',${n})">x${n}</button>`).join('')}
               </div>
               <button class="ci-customize ${customized ? 'on' : ''}" onclick="UI.openCustomize('${line.uid}')">✎ ${customized ? 'Edit' : 'Customize'}</button>
               <button class="ci-ico danger" title="Remove" onclick="UI.remove('${line.uid}')">🗑️</button>
@@ -513,12 +595,23 @@
     S.addItem(id);
     toast(item.name + ' added');
   }
+  function quickSoldOut(event, id) {
+    if (event) event.stopPropagation();
+    const item = S.findItem(id);
+    if (!item) return;
+    requireAdmin(() => {
+      S.toggleAvailability(id);
+      refreshGrid();
+      toast(item.available === false ? item.name + ' marked sold out' : item.name + ' available');
+    }, 'Manager PIN to change sold-out status');
+  }
   function itemCardKey(event, id) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     addItem(id);
   }
   const inc = (uid, d) => S.incQty(uid, d);
+  const setQty = (uid, n) => S.setQty(uid, n);
   const remove = (uid) => S.removeLine(uid);
   const setType = (t) => { S.setOrderType(t); refreshGrid(); };  // grid reflects take-away-only blocking
   const setTable = (v) => S.setTable(v);
@@ -1051,7 +1144,7 @@
   }
   function payRemove(i) { payState.tenders.splice(i, 1); renderPaymentModal(); }
   function completeSale() {
-    const order = S.completeOrder(payState.tenders);
+    const order = S.completeOrder(payState.tenders, { training: S.isTrainingMode() });
     if (!order) return toast('Payment is not fully tendered');
     closeModal();
     showReceipt(order, true);
@@ -1088,6 +1181,7 @@
         <div class="r-meta">${esc(c.address)}${contact ? '<br>' + contact : ''}</div>
       </div>
       <div class="r-sep"></div>
+      ${order.training ? '<div class="r-training">TRAINING RECEIPT · NOT A REAL SALE</div><div class="r-sep"></div>' : ''}
       <div class="r-ordercode">ORDER ${order.code || ('#' + order.id)}</div>
       <div class="r-info">
         <div><span>Type</span><b>${order.orderType === 'dine-in' ? 'Dine-in' : 'Take-away'}${order.pager ? ' · Pager ' + esc(order.pager) : ''}</b></div>
@@ -1122,6 +1216,7 @@
       <div class="r-sep"></div>
       <div class="r-foot">${esc(c.receiptFooter)}</div>
       ${order.status === 'voided' ? '<div class="r-void">*** VOIDED ***</div>' : ''}
+      ${order.training ? '<div class="r-void training">*** TRAINING ONLY ***</div>' : ''}
       ${order.status === 'refunded' ? '<div class="r-void">*** FULLY REFUNDED ***</div>' : ''}
       ${order.status === 'partial-refund' ? '<div class="r-void partial">*** PARTIALLY REFUNDED ***</div>' : ''}
     </div>`;
@@ -1159,10 +1254,10 @@
   }
 
   function showReceipt(order, fresh) {
-    const canRefund = order.status === 'paid' || order.status === 'partial-refund';
+    const canRefund = !order.training && (order.status === 'paid' || order.status === 'partial-refund');
     const refundBtn = (!fresh && canRefund)
       ? `<button class="ghost-btn danger" onclick="UI.openRefund(${order.id})">↩ Refund</button>` : '';
-    openModal(modalShell(fresh ? '✓ Sale complete' : 'Receipt #' + order.id, `
+    openModal(modalShell(order.training ? '🎓 Training receipt' : (fresh ? '✓ Sale complete' : 'Receipt #' + order.id), `
       <div class="receipt-frame">${receiptHTML(order)}</div>`, {
       size: 'sm',
       foot: `<button class="ghost-btn" onclick="UI.closeModal()">${fresh ? 'New order' : 'Close'}</button>
@@ -1204,15 +1299,17 @@
       const methods = [...new Set(o.payments.map((p) => p.method))].map(cap).join(', ');
       const refunded = o.refundedTotal || 0;
       const net = o.totals.total - refunded;
-      const canRefund = o.status === 'paid' || o.status === 'partial-refund';
-      return `<tr class="${o.status === 'voided' ? 'voided' : ''}">
+      const canRefund = !o.training && (o.status === 'paid' || o.status === 'partial-refund');
+      const statusText = o.training ? 'Training' : (statusLabel[o.status] || cap(o.status));
+      const statusCls = o.training ? 'training' : o.status;
+      return `<tr class="${o.status === 'voided' ? 'voided' : ''} ${o.training ? 'training' : ''}">
         <td><b>${o.code || ('#' + o.id)}</b><span class="row-sub">#${o.id}</span></td>
         <td>${d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</td>
         <td>${o.orderType === 'dine-in' ? '🍽️ Dine-in' : '🥡 Take-away'}${o.pager ? ' · P' + esc(o.pager) : ''}</td>
         <td>${o.totals.itemCount}</td>
         <td>${esc(methods)}</td>
         <td class="num">${refunded ? `<span class="num-refunded">−${money(refunded)}</span> ` : ''}<b>${money(net)}</b></td>
-        <td><span class="status ${o.status}">${statusLabel[o.status] || cap(o.status)}</span></td>
+        <td><span class="status ${statusCls}">${statusText}</span></td>
         <td class="actions">
           <button class="mini-btn" title="Reprint" onclick="UI.printReceipt(${o.id})">🖨</button>
           <button class="mini-btn" onclick="UI.viewReceipt(${o.id})">Receipt</button>
@@ -1221,8 +1318,10 @@
       </tr>`;
     }).join('') : `<tr><td colspan="8" class="empty-cell">${searching ? 'No orders match “' + esc(ui.orderQuery) + '”.' : 'No orders for this day.'}</td></tr>`;
 
-    const dayTotal = all.filter((o) => o.status !== 'voided').reduce((s, o) => s + (o.totals.total - (o.refundedTotal || 0)), 0);
-    const refTotal = all.filter((o) => o.status !== 'voided').reduce((s, o) => s + (o.refundedTotal || 0), 0);
+    const realOrders = all.filter((o) => !o.training && o.status !== 'voided');
+    const dayTotal = realOrders.reduce((s, o) => s + (o.totals.total - (o.refundedTotal || 0)), 0);
+    const refTotal = realOrders.reduce((s, o) => s + (o.refundedTotal || 0), 0);
+    const trainingCount = all.filter((o) => o.training).length;
 
     return `
       <div class="page">
@@ -1242,7 +1341,8 @@
         <div class="orders-summary">
           <div class="pill">${searching ? 'Results' : 'Day'} takings: <b>${money(dayTotal)}</b></div>
           ${refTotal ? `<div class="pill warn">Refunds: <b>−${money(refTotal)}</b></div>` : ''}
-          <div class="pill">Orders: <b>${all.filter((o) => o.status !== 'voided').length}</b></div>
+          <div class="pill">Orders: <b>${realOrders.length}</b></div>
+          ${trainingCount ? `<div class="pill training">Training: <b>${trainingCount}</b></div>` : ''}
         </div>
         ${renderSuspendedSection()}
         <div class="table-wrap">
@@ -1524,11 +1624,50 @@
   const setReportTo = (v) => { ui.reportTo = v; render(); };
   const setReportCat = (v) => { ui.reportCat = v; render(); };
 
+  function topListHTML(items, emptyText) {
+    return items.length ? items.map((it, i) => `
+      <div class="top-row"><span class="rank">${i + 1}</span><span class="top-name">${esc(it.name)}</span>
+        <span class="top-qty">${it.qty} sold</span><span class="top-rev">${money(it.revenue)}</span></div>`).join('')
+      : `<p class="muted-p">${emptyText || 'No items sold.'}</p>`;
+  }
+
+  function hourlyHeatmapHTML(r) {
+    const max = Math.max(1, ...Object.values(r.byHour));
+    return `<div class="heatmap">
+      ${Array.from({ length: 24 }).map((_, hr) => {
+        const val = r.byHour[hr] || 0;
+        const pct = val / max;
+        const bg = 0.12 + pct * 0.54;
+        const border = 0.18 + pct * 0.38;
+        const label = String(hr).padStart(2, '0') + ':00';
+        return `<div class="heat-cell" style="--heat-bg:${bg.toFixed(2)};--heat-border:${border.toFixed(2)}" title="${label} · ${money(val)} · ${r.byHourOrders[hr] || 0} orders">
+          <span>${label}</span><b>${money(val)}</b><em>${r.byHourOrders[hr] || 0} orders</em>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  function staffSalesHTML(r) {
+    return r.staffRows.length ? `<div class="staff-report">
+      ${r.staffRows.map((s, i) => `<div class="staff-report-row">
+        <span class="rank">${i + 1}</span>
+        <span class="staff-name-report">${esc(s.name)}</span>
+        <span>${s.orders} orders</span>
+        <span>${s.items} items</span>
+        <span class="top-rev">${money(s.sales)}</span>
+        ${s.refunds ? `<span class="staff-refund">−${money(s.refunds)} refunds</span>` : '<span class="muted-p">No refunds</span>'}
+      </div>`).join('')}
+    </div>` : '<p class="muted-p">No staff sales in this period.</p>';
+  }
+
   function renderDashboard() {
     const { from, to } = reportRange();
     const r = S.report(from, to);
     const cats = S.getCategories();
     const catFilter = ui.reportCat || '';
+    const todayKey = S.dayKey(Date.now());
+    const todayReport = S.report(todayKey, todayKey);
+    const weekReport = S.report(shiftDay(-6), todayKey);
 
     const kpi = (label, val, sub) => `
       <div class="kpi"><div class="kpi-val">${val}</div><div class="kpi-label">${label}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
@@ -1552,10 +1691,7 @@
 
     // top sellers, optionally filtered to a category
     const items = (catFilter ? r.itemRows.filter((it) => it.cat === catFilter) : r.itemRows).slice(0, 12);
-    const topRows = items.length ? items.map((it, i) => `
-      <div class="top-row"><span class="rank">${i + 1}</span><span class="top-name">${esc(it.name)}</span>
-        <span class="top-qty">${it.qty} sold</span><span class="top-rev">${money(it.revenue)}</span></div>`).join('')
-      : '<p class="muted-p">No items sold.</p>';
+    const topRows = topListHTML(items, 'No items sold.');
 
     // category focus strip
     let focus = '';
@@ -1613,6 +1749,10 @@
           ${kpi('Take-away', r.takeAway, 'orders')}
         </div>
         <div class="dash-grid">
+          <div class="panel wide"><h3>Hourly sales heatmap</h3>${hourlyHeatmapHTML(r)}</div>
+          <div class="panel"><h3>Best sellers today</h3><div class="top-list">${topListHTML(todayReport.itemRows.slice(0, 8), 'No items sold today.')}</div></div>
+          <div class="panel"><h3>Best sellers last 7 days</h3><div class="top-list">${topListHTML(weekReport.itemRows.slice(0, 8), 'No items sold this week.')}</div></div>
+          <div class="panel wide"><h3>Staff sales report</h3>${staffSalesHTML(r)}</div>
           <div class="panel"><h3>Sales by category</h3><div class="bars">${catBars}</div></div>
           <div class="panel"><h3>Payment methods (net of refunds)</h3><div class="bars">${payRows}</div></div>
           <div class="panel wide"><h3>Top sellers${catFilter ? ' — ' + esc((cats.find((c) => c.id === catFilter) || {}).name) : ''}</h3><div class="top-list">${topRows}</div></div>
@@ -1660,6 +1800,14 @@
       <table class="rep-table"><tr><th>Method</th><th class="num">Net</th></tr>
         ${Object.entries(r.byPayment).map(([m, v]) => `<tr><td>${cap(m)}</td><td class="num">${money(v)}</td></tr>`).join('') || '<tr><td colspan="2">—</td></tr>'}
       </table>
+      <h4>Hourly sales</h4>
+      <table class="rep-table"><tr><th>Hour</th><th class="num">Orders</th><th class="num">Net sales</th></tr>
+        ${Array.from({ length: 24 }).map((_, hr) => `<tr><td>${String(hr).padStart(2, '0')}:00</td><td class="num">${r.byHourOrders[hr] || 0}</td><td class="num">${money(r.byHour[hr] || 0)}</td></tr>`).join('')}
+      </table>
+      <h4>Staff sales</h4>
+      <table class="rep-table"><tr><th>Cashier</th><th class="num">Orders</th><th class="num">Items</th><th class="num">Net sales</th><th class="num">Refunds</th></tr>
+        ${r.staffRows.map((s) => `<tr><td>${esc(s.name)}</td><td class="num">${s.orders}</td><td class="num">${s.items}</td><td class="num">${money(s.sales)}</td><td class="num">−${money(s.refunds)}</td></tr>`).join('') || '<tr><td colspan="5">—</td></tr>'}
+      </table>
       <h4>Items${catFilter ? ' — ' + esc(catName(catFilter)) : ''}</h4>
       <table class="rep-table"><tr><th>Item</th><th>Category</th><th class="num">Qty</th><th class="num">Revenue</th></tr>
         ${items.map((it) => `<tr><td>${esc(it.name)}</td><td>${esc(catName(it.cat))}</td><td class="num">${it.qty}</td><td class="num">${money(it.revenue)}</td></tr>`).join('') || '<tr><td colspan="4">—</td></tr>'}
@@ -1700,6 +1848,10 @@
     cats.filter((cc) => r.byCategory[cc.id]).forEach((cc) => { html += `<tr><td>${esc2(cc.name)}</td><td>${num(r.byCategory[cc.id])}</td></tr>`; });
     html += `<tr><td></td></tr><tr><th>Payment</th><th>Net (${cur})</th></tr>`;
     Object.entries(r.byPayment).forEach(([m, v]) => { html += `<tr><td>${cap(m)}</td><td>${num(v)}</td></tr>`; });
+    html += `<tr><td></td></tr><tr><th>Hour</th><th>Orders</th><th>Net (${cur})</th></tr>`;
+    Array.from({ length: 24 }).forEach((_, hr) => { html += `<tr><td>${String(hr).padStart(2, '0')}:00</td><td>${r.byHourOrders[hr] || 0}</td><td>${num(r.byHour[hr] || 0)}</td></tr>`; });
+    html += `<tr><td></td></tr><tr><th>Cashier</th><th>Orders</th><th>Items</th><th>Net (${cur})</th><th>Refunds (${cur})</th></tr>`;
+    r.staffRows.forEach((s) => { html += `<tr><td>${esc2(s.name)}</td><td>${s.orders}</td><td>${s.items}</td><td>${num(s.sales)}</td><td>-${num(s.refunds)}</td></tr>`; });
     html += `<tr><td></td></tr><tr><th>Item</th><th>Category</th><th>Qty</th><th>Revenue (${cur})</th></tr>`;
     items.forEach((it) => { html += `<tr><td>${esc2(it.name)}</td><td>${esc2(catName(it.cat))}</td><td>${it.qty}</td><td>${num(it.revenue)}</td></tr>`; });
     html += `</table>`;
@@ -2287,9 +2439,9 @@
   global.UI = {
     init, go, closeModal, confirmYes,
     // auth / shell
-    chooseCashier, logout, openAdmin, exitAdmin, pinKey, pinClear, pinBack,
+    chooseCashier, logout, openAdmin, exitAdmin, toggleTrainingMode, toggleTouchMode, pinKey, pinClear, pinBack,
     // pos
-    setCategory, setDrinkSub, onSearch, clearSearch, addItem, itemCardKey, inc, remove, setType, setPager, setNote, hold, clear,
+    setCategory, setDrinkSub, onSearch, clearSearch, addItem, itemCardKey, quickSoldOut, inc, setQty, remove, setType, setPager, setNote, hold, clear,
     // cashier promotions
     openPromoInfo, gotoPromos,
     // customize / discount

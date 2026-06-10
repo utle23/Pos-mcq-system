@@ -70,7 +70,8 @@
     held: [],        // parked tickets
     orders: [],      // completed orders (history)
     credits: [],     // manager credits/refunds with no linked receipt
-    tills: []        // ring-off (Z) records
+    tills: [],       // ring-off (Z) records
+    trainingMode: false
   };
 
   const listeners = new Set();
@@ -113,6 +114,7 @@
         state.orders = saved.orders || [];
         state.credits = saved.credits || [];
         state.tills = saved.tills || [];
+        state.trainingMode = !!saved.trainingMode;
         state.cart = saved.cart && saved.cart.lines ? saved.cart : newCart();
       } catch (e) { /* corrupt -> defaults */ }
     }
@@ -204,7 +206,8 @@
       held: state.held,
       orders: state.orders,
       credits: state.credits,
-      tills: state.tills
+      tills: state.tills,
+      trainingMode: state.trainingMode
     }));
   }
 
@@ -216,6 +219,8 @@
   const getCart = () => state.cart;
   const getHeld = () => state.held;
   const getOrders = () => state.orders;
+  const isTrainingMode = () => !!state.trainingMode;
+  function setTrainingMode(on) { state.trainingMode = !!on; commit(); }
   const findItem = (id) => state.menu.find((m) => m.id === id);
   const itemsByCategory = (catId) => state.menu.filter((m) => m.cat === catId);
 
@@ -541,11 +546,11 @@
   // Receipt code that resets to 0001 each day.
   function nextDailyNo(ts) {
     const k = dayKey(ts);
-    return state.orders.filter((o) => dayKey(o.createdAt) === k).length + 1;
+    return state.orders.filter((o) => !o.training && dayKey(o.createdAt) === k).length + 1;
   }
   const pad4 = (n) => String(n).padStart(4, '0');
 
-  function completeOrder(payments) {
+  function completeOrder(payments, opts = {}) {
     const totals = computeTotals(state.cart);
     const cleanPayments = (payments || [])
       .map((p) => ({ method: p.method || 'cash', amount: round2(Math.max(0, Number(p.amount) || 0)) }))
@@ -554,12 +559,14 @@
     const paid = cleanPayments.reduce((s, p) => s + p.amount, 0);
     if (!state.cart.lines.length || !cleanPayments.length || paid < payable.total - 0.0001) return null;
     const now = Date.now();
-    const dailyNo = nextDailyNo(now);
+    const training = opts.training != null ? !!opts.training : !!state.trainingMode;
+    const dailyNo = training ? 0 : nextDailyNo(now);
     const order = {
       id: state.config.orderSeq++,
       ref: uid(),
       dailyNo,
-      code: pad4(dailyNo),     // displayed receipt code, resets daily
+      code: training ? 'TRAIN' : pad4(dailyNo),     // displayed receipt code, resets daily
+      training,
       createdAt: now,
       cashier: state.config.cashier,
       orderType: state.cart.orderType,
@@ -568,7 +575,7 @@
       pager: state.cart.pager,
       note: state.cart.note,
       lines: totals.lines.map((l) => ({
-        name: l.name, qty: l.qty, unitPrice: l.unitPrice, basePrice: l.basePrice, isCombo: l.isCombo,
+        itemId: l.itemId, name: l.name, qty: l.qty, unitPrice: l.unitPrice, basePrice: l.basePrice, isCombo: l.isCombo,
         components: l.components, note: l.note, addons: l.addons || [], mods: l.mods || [],
         lineGross: l.lineGross, lineDiscount: l.lineDiscount, lineNet: l.lineNet,
         lineManual: l.lineManual || 0, discount: clone(l.discount || { mode: 'none', value: 0 }),
@@ -597,7 +604,7 @@
   }
 
   function findOrder(id) { return state.orders.find((o) => o.id === Number(id)); }
-  function lastOrder() { return state.orders.find((o) => o.status !== 'voided') || null; }
+  function lastOrder() { return state.orders.find((o) => o.status !== 'voided' && !o.training) || null; }
 
   // Search across ALL orders by order number, table or customer.
   function searchOrders(query) {
@@ -786,7 +793,7 @@
       return true;
     };
     // Voided orders are excluded entirely; refunded/partial still count (net of refund).
-    const paid = state.orders.filter((o) => o.status !== 'voided' && inRange(o.createdAt));
+    const paid = state.orders.filter((o) => !o.training && o.status !== 'voided' && inRange(o.createdAt));
 
     const summary = {
       orders: paid.length,
@@ -795,18 +802,24 @@
       promoDiscount: 0, manualDiscount: 0,
       items: 0,
       byPayment: {}, byCategory: {}, byItem: {},
-      byHour: {},
+      byHour: {}, byHourOrders: {}, byStaff: {},
       dineIn: 0, takeAway: 0
     };
 
     paid.forEach((o) => {
       const refunded = o.refundedTotal || 0;
       const keepRatio = o.totals.total > 0 ? (o.totals.total - refunded) / o.totals.total : 0;
+      const orderNet = round2(o.totals.total - refunded);
+      const staff = o.cashier || 'Unknown';
+      if (!summary.byStaff[staff]) summary.byStaff[staff] = { orders: 0, sales: 0, refunds: 0, items: 0 };
+      summary.byStaff[staff].orders += 1;
+      summary.byStaff[staff].sales += orderNet;
+      summary.byStaff[staff].refunds += refunded;
 
       summary.grossSales += o.totals.total;
       summary.refunds += refunded;
       summary.refundCount += (o.refunds ? o.refunds.length : 0);
-      summary.total += (o.totals.total - refunded);       // net takings
+      summary.total += orderNet;       // net takings
       summary.gross += o.totals.gross * keepRatio;
       summary.net += o.totals.net * keepRatio;
       summary.tax += o.totals.tax * keepRatio;
@@ -815,7 +828,8 @@
       if (o.orderType === 'dine-in') summary.dineIn++; else summary.takeAway++;
 
       const hr = new Date(o.createdAt).getHours();
-      summary.byHour[hr] = (summary.byHour[hr] || 0) + (o.totals.total - refunded);
+      summary.byHour[hr] = (summary.byHour[hr] || 0) + orderNet;
+      summary.byHourOrders[hr] = (summary.byHourOrders[hr] || 0) + 1;
 
       // Net cash-drawer view: tenders in, refunds out (by method)
       o.payments.forEach((p) => {
@@ -830,19 +844,24 @@
         if (soldQty <= 0) return;
         const perUnitNet = l.lineNet / l.qty;
         summary.items += soldQty;
+        summary.byStaff[staff].items += soldQty;
         summary.byCategory[l.cat] = (summary.byCategory[l.cat] || 0) + perUnitNet * soldQty;
-        if (!summary.byItem[l.name]) summary.byItem[l.name] = { qty: 0, revenue: 0, cat: l.cat };
-        summary.byItem[l.name].qty += soldQty;
-        summary.byItem[l.name].revenue += perUnitNet * soldQty;
+        const itemKey = l.itemId || l.name;
+        if (!summary.byItem[itemKey]) summary.byItem[itemKey] = { name: l.name, itemId: l.itemId || null, qty: 0, revenue: 0, cat: l.cat };
+        summary.byItem[itemKey].qty += soldQty;
+        summary.byItem[itemKey].revenue += perUnitNet * soldQty;
       });
     });
 
     summary.avgOrder = paid.length ? round2(summary.total / paid.length) : 0;
     // Full item table (used for category filtering & exports)
-    summary.itemRows = Object.entries(summary.byItem)
-      .map(([name, v]) => ({ name, cat: v.cat, qty: v.qty, revenue: round2(v.revenue) }))
+    summary.itemRows = Object.values(summary.byItem)
+      .map((v) => ({ itemId: v.itemId, name: v.name, cat: v.cat, qty: v.qty, revenue: round2(v.revenue) }))
       .sort((a, b) => b.qty - a.qty);
     summary.topItems = summary.itemRows.slice(0, 8);
+    summary.staffRows = Object.entries(summary.byStaff)
+      .map(([name, v]) => ({ name, orders: v.orders, items: v.items, sales: round2(v.sales), refunds: round2(v.refunds) }))
+      .sort((a, b) => b.sales - a.sales);
 
     ['gross', 'net', 'tax', 'total', 'grossSales', 'refunds', 'promoDiscount', 'manualDiscount'].forEach((k) => {
       summary[k] = round2(summary[k]);
@@ -864,7 +883,7 @@
     credits.forEach((c) => { byMethod[c.method] = (byMethod[c.method] || 0) - c.amount; });
 
     let rounding = 0;
-    state.orders.filter((o) => o.status !== 'voided' && dayKey(o.createdAt) === day)
+    state.orders.filter((o) => !o.training && o.status !== 'voided' && dayKey(o.createdAt) === day)
       .forEach((o) => { rounding += (o.totals.roundingAdj || 0); });
 
     const closed = state.tills.filter((t) => t.dayKey === day);
@@ -911,7 +930,8 @@
       held: [],
       orders: [],
       credits: [],
-      tills: []
+      tills: [],
+      trainingMode: false
     };
     commit();
   }
@@ -920,7 +940,7 @@
     return JSON.stringify({
       config: state.config, menu: state.menu, promotions: state.promotions,
       modifierGroups: state.modifierGroups, held: state.held, orders: state.orders,
-      credits: state.credits, tills: state.tills
+      credits: state.credits, tills: state.tills, trainingMode: state.trainingMode
     }, null, 2);
   }
   function importData(json) {
@@ -933,6 +953,7 @@
     if (data.orders) state.orders = data.orders;
     if (data.credits) state.credits = data.credits;
     if (data.tills) state.tills = data.tills;
+    state.trainingMode = !!data.trainingMode;
     commit();
   }
 
@@ -940,7 +961,7 @@
   global.Store = {
     load, subscribe, commit,
     // getters
-    getConfig, getMenu, getCart, getHeld, getOrders, findItem, itemsByCategory,
+    getConfig, getMenu, getCart, getHeld, getOrders, isTrainingMode, setTrainingMode, findItem, itemsByCategory,
     getCategories: () => D.CATEGORIES, getPromotions: () => state.promotions,
     money, round2,
     // pricing
