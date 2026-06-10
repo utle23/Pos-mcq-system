@@ -606,19 +606,47 @@
   function findOrder(id) { return state.orders.find((o) => o.id === Number(id)); }
   function lastOrder() { return state.orders.find((o) => o.status !== 'voided' && !o.training) || null; }
 
-  // Search across ALL orders by order number, table or customer.
+  // Search across ALL orders by receipt details, amount, time, table or customer.
   function searchOrders(query) {
     const q = String(query || '').trim().toLowerCase();
     if (!q) return [];
     const num = q.replace(/^#/, '');
-    return state.orders.filter((o) =>
-      String(o.id).includes(num) ||
-      String(o.code || '').toLowerCase().includes(num) ||
-      String(o.ref || '').toLowerCase().includes(q) ||
-      (o.pager && String(o.pager).toLowerCase().includes(q)) ||
-      (o.table && String(o.table).toLowerCase().includes(q)) ||
-      (o.customer && o.customer.toLowerCase().includes(q))
-    );
+    const compactQ = q.replace(/\s+/g, '');
+    const currency = String(state.config.currency || '$').toLowerCase();
+    const amountRaw = q.split(currency).join('').replace(/[$,\s]/g, '');
+    const amountQuery = /^\d+(\.\d{1,2})?$/.test(amountRaw) ? round2(Number(amountRaw)) : null;
+    const sameAmount = (n) => amountQuery != null && Math.abs(round2(Number(n) || 0) - amountQuery) < 0.005;
+    const includes = (v) => String(v || '').toLowerCase().includes(q);
+    const compactIncludes = (v) => String(v || '').toLowerCase().replace(/\s+/g, '').includes(compactQ);
+    const timeStrings = (ts) => {
+      const d = new Date(ts);
+      const hr24 = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return [
+        d.toLocaleString().toLowerCase(),
+        d.toLocaleDateString().toLowerCase(),
+        d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }).toLowerCase(),
+        hr24 + ':' + min,
+        String(d.getHours()) + ':' + min
+      ];
+    };
+    return state.orders.filter((o) => {
+      const net = round2((o.totals ? o.totals.total : 0) - (o.refundedTotal || 0));
+      return String(o.id).includes(num) ||
+        String(o.code || '').toLowerCase().includes(num) ||
+        String(o.ref || '').toLowerCase().includes(q) ||
+        (o.pager && includes(o.pager)) ||
+        (o.table && includes(o.table)) ||
+        (o.customer && includes(o.customer)) ||
+        sameAmount(o.totals && o.totals.total) ||
+        sameAmount(o.totals && o.totals.gross) ||
+        sameAmount(o.totals && o.totals.net) ||
+        sameAmount(net) ||
+        sameAmount(o.paid) ||
+        sameAmount(o.refundedTotal) ||
+        (o.payments || []).some((p) => sameAmount(p.amount) || includes(p.method)) ||
+        timeStrings(o.createdAt).some((v) => includes(v) || compactIncludes(v));
+    });
   }
 
   // Full cancellation — removes the sale from all takings. Use for mistakes.

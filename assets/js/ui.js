@@ -139,7 +139,6 @@
       ? `<button class="tb-action" onclick="UI.exitAdmin()">🖥️ Register</button>`
       : `<button class="tb-action mode ${S.isTrainingMode() ? 'on' : ''}" title="Training sales do not count in reports" onclick="UI.toggleTrainingMode()">🎓 <span>${S.isTrainingMode() ? 'Training ON' : 'Training'}</span></button>
          <button class="tb-action touch ${c.touchMode ? 'on' : ''}" title="Bigger tablet/counter controls" onclick="UI.toggleTouchMode()">👆 <span>${c.touchMode ? 'Touch ON' : 'Touch'}</span></button>
-         <button class="tb-action promo" title="Active promotions" onclick="UI.openPromoInfo()">🏷️ <span>Promos</span>${activePromos().length ? `<span class="tb-badge">${activePromos().length}</span>` : ''}</button>
          <button class="tb-action" title="Transaction history" onclick="UI.go('orders')">📑 <span>History</span></button>
          <button class="tb-action" title="Reprint" onclick="UI.reprintLast()">🖨 <span>Reprint</span></button>
          <button class="tb-action key" onclick="UI.openAdmin()">🔑 <span>Admin</span></button>`;
@@ -1330,7 +1329,7 @@
           <div class="page-tools">
             <div class="lookup">
               <span class="search-ico">🔎</span>
-              <input id="order-search" type="text" placeholder="Look up order code, ref #, pager…"
+              <input id="order-search" type="text" placeholder="Lookup code, amount, time, pager…"
                 value="${esc(ui.orderQuery)}" oninput="UI.onOrderSearch(this.value)" autocomplete="off">
               ${searching ? `<button class="search-clear" onclick="UI.clearOrderSearch()">✕</button>` : ''}
             </div>
