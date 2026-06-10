@@ -72,7 +72,12 @@
     credits: [],     // manager credits/refunds with no linked receipt
     tills: [],       // ring-off (Z) records
     auditLog: [],    // manager-sensitive actions
-    trainingMode: false
+    members: clone(D.MEMBERS || []),   // loyalty members (kiosk membership)
+    trainingMode: false,
+    // Live customer-facing channel: mirrors the counter payment in progress to a
+    // second-screen window so the guest sees tendered / change / split live, then
+    // a thank-you. { mode:'idle' } | { mode:'pay', ... } | { mode:'done', ... }
+    live: { mode: 'idle' }
   };
 
   const listeners = new Set();
@@ -116,7 +121,9 @@
         state.credits = saved.credits || [];
         state.tills = saved.tills || [];
         state.auditLog = Array.isArray(saved.auditLog) ? saved.auditLog : [];
+        state.members = Array.isArray(saved.members) && saved.members.length ? saved.members : clone(D.MEMBERS || []);
         state.trainingMode = !!saved.trainingMode;
+        state.live = saved.live && saved.live.mode ? saved.live : { mode: 'idle' };
         state.cart = saved.cart && saved.cart.lines ? saved.cart : newCart();
       } catch (e) { /* corrupt -> defaults */ }
     }
@@ -210,7 +217,9 @@
       credits: state.credits,
       tills: state.tills,
       auditLog: state.auditLog,
-      trainingMode: state.trainingMode
+      members: state.members,
+      trainingMode: state.trainingMode,
+      live: state.live
     }));
   }
 
@@ -245,6 +254,20 @@
   }
   const findItem = (id) => state.menu.find((m) => m.id === id);
   const itemsByCategory = (catId) => state.menu.filter((m) => m.cat === catId);
+
+  /* ---- live customer-facing payment channel (second screen) -------------- */
+  const getLive = () => state.live || { mode: 'idle' };
+  // Mirror the payment-in-progress / thank-you to any second-screen window.
+  // Always carries a timestamp so a stale broadcast can be ignored downstream.
+  function setLive(live) {
+    state.live = Object.assign({ mode: 'idle' }, live || {}, { ts: Date.now() });
+    commit();
+  }
+  function clearLive() {
+    if (state.live && state.live.mode === 'idle') return;   // nothing to clear
+    state.live = { mode: 'idle', ts: Date.now() };
+    commit();
+  }
 
   function money(n) {
     const c = state.config;
@@ -576,13 +599,16 @@
   const pad4 = (n) => String(n).padStart(4, '0');
 
   function completeOrder(payments, opts = {}) {
-    const totals = computeTotals(state.cart);
+    // The kiosk passes its own cart so a counter ticket in progress is untouched;
+    // both channels still draw from the SAME daily queue number (nextDailyNo).
+    const cart = opts.cart || state.cart;
+    const totals = computeTotals(cart);
     const cleanPayments = (payments || [])
       .map((p) => ({ method: p.method || 'cash', amount: round2(Math.max(0, Number(p.amount) || 0)) }))
       .filter((p) => p.amount > 0);
     const payable = paymentTotal(totals, cleanPayments);
     const paid = cleanPayments.reduce((s, p) => s + p.amount, 0);
-    if (!state.cart.lines.length || !cleanPayments.length || paid < payable.total - 0.0001) return null;
+    if (!cart.lines.length || !cleanPayments.length || paid < payable.total - 0.0001) return null;
     const now = Date.now();
     const training = opts.training != null ? !!opts.training : !!state.trainingMode;
     const dailyNo = training ? 0 : nextDailyNo(now);
@@ -592,13 +618,15 @@
       dailyNo,
       code: training ? 'TRAIN' : pad4(dailyNo),     // displayed receipt code, resets daily
       training,
+      channel: opts.channel || 'counter',           // 'counter' | 'kiosk'
+      memberId: opts.memberId || null,
       createdAt: now,
-      cashier: state.config.cashier,
-      orderType: state.cart.orderType,
-      table: state.cart.table,
-      customer: state.cart.customer,
-      pager: state.cart.pager,
-      note: state.cart.note,
+      cashier: opts.channel === 'kiosk' ? 'Order Kiosk' : state.config.cashier,
+      orderType: cart.orderType,
+      table: cart.table,
+      customer: cart.customer,
+      pager: cart.pager,
+      note: cart.note,
       lines: totals.lines.map((l) => ({
         itemId: l.itemId, name: l.name, qty: l.qty, unitPrice: l.unitPrice, basePrice: l.basePrice, isCombo: l.isCombo,
         components: l.components, note: l.note, addons: l.addons || [], mods: l.mods || [],
@@ -614,7 +642,7 @@
         net: totals.net, tax: totals.tax, total: payable.total,
         taxInclusive: totals.taxInclusive, roundingAdj: payable.roundingAdj
       },
-      discount: clone(state.cart.discount),
+      discount: clone(cart.discount),
       payments: clone(cleanPayments),
       paid: round2(paid),
       change: round2(Math.max(0, paid - payable.total)),
@@ -622,11 +650,38 @@
       refunds: [],
       refundedTotal: 0
     };
+    // Loyalty: award points to a linked member (kiosk or counter).
+    if (!training && order.memberId) {
+      const m = state.members.find((x) => x.id === order.memberId);
+      const earned = Math.max(0, Math.floor(payable.total * (state.config.pointsPerDollar || 1)));
+      if (m) { m.points = (m.points || 0) + earned; order.pointsEarned = earned; }
+    }
     state.orders.unshift(order);
-    state.cart = newCart();
+    if (!opts.cart) state.cart = newCart();   // only the counter cart auto-resets
     if (training) audit('sale.training', { orderId: order.id, total: payable.total, items: totals.itemCount }, 'notice');
+    if (order.channel === 'kiosk') audit('sale.kiosk', { orderId: order.id, code: order.code, total: payable.total, member: order.memberId || null }, 'info');
     commit();
     return order;
+  }
+
+  /* ---- loyalty members --------------------------------------------------- */
+  function getMembers() { return state.members; }
+  function findMember(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return null;
+    const digits = q.replace(/\D/g, '');
+    return state.members.find((m) =>
+      String(m.code || '').toLowerCase().replace(/\s/g, '') === q.replace(/\s/g, '') ||
+      (digits.length >= 6 && String(m.phone || '').replace(/\D/g, '') === digits) ||
+      String(m.id).toLowerCase() === q
+    ) || null;
+  }
+  function addMemberPoints(id, pts) {
+    const m = state.members.find((x) => x.id === id);
+    if (!m) return null;
+    m.points = Math.max(0, (m.points || 0) + (Number(pts) || 0));
+    commit();
+    return m;
   }
 
   function findOrder(id) { return state.orders.find((o) => o.id === Number(id)); }
@@ -1081,6 +1136,10 @@
     // orders
     completeOrder, voidOrder, refundOrder, findOrder, lastOrder, searchOrders,
     refundableQty, remainingRefundable,
+    // loyalty members
+    getMembers, findMember, addMemberPoints,
+    // live customer-facing channel
+    getLive, setLive, clearLive,
     // menu mgmt
     upsertMenuItem, deleteMenuItem, toggleAvailability,
     // config & promotions

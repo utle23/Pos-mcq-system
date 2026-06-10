@@ -231,6 +231,15 @@
     }
   ];
 
+  // ---- Loyalty members ------------------------------------------------------
+  // Demo membership accounts. The Order Kiosk can look one up by card code or
+  // phone ("scan"), then earn points on the order. code = the scannable id.
+  const MEMBERS = [
+    { id: 'mem-1001', name: 'Linh Nguyen', code: 'MCQ1001', phone: '0400111222', points: 240, joined: '2024-03-11' },
+    { id: 'mem-1002', name: 'Anh Tran',    code: 'MCQ1002', phone: '0400333444', points: 80,  joined: '2024-07-02' },
+    { id: 'mem-1003', name: 'Minh Le',     code: 'MCQ1003', phone: '0400555666', points: 515, joined: '2023-11-20' }
+  ];
+
   // ---- Default store configuration -----------------------------------------
   const CONFIG = {
     seedVersion: 12,           // bump to migrate persisted store details
@@ -248,6 +257,7 @@
     cashier: 'Cashier 1',     // active cashier (set on login)
     receiptFooter: 'Thank you for dining with MCQ Café! Xin cảm ơn quý khách 🌸',
     orderSeq: 1001,           // internal unique order id (never resets)
+    pointsPerDollar: 1,       // loyalty: points earned per $1 spent (kiosk + counter)
     // Staff accounts. role: 'admin' (full access) | 'user' (register only).
     users: [
       { id: 'u-admin', name: 'Manager',   pin: '1234', role: 'admin' },
@@ -261,6 +271,7 @@
     MENU,
     MODIFIER_GROUPS,
     PROMOTIONS,
+    MEMBERS,
     CONFIG,
     VERSION: 12
   };

@@ -20,7 +20,11 @@
   const ui = {
     view: 'register', currentUser: null, adminUnlocked: false,
     category: S.getCategories()[0].id, drinkSub: 'juice', search: '',
-    menuTab: 'items', reportFrom: '', reportTo: '', reportCat: '', historyDay: null, orderQuery: ''
+    menuTab: 'items', reportFrom: '', reportTo: '', reportCat: '', historyDay: null, orderQuery: '',
+    // loyalty member attached to the current counter ticket (scanned at checkout)
+    counterMember: null,
+    // Standing Order Tree (self-service kiosk)
+    kioskStage: 'attract', kioskCat: null, kioskPayStage: 'review', member: null, kioskCartOpen: false
   };
 
   // Top-level category navigation; the Drinks group reveals its sub-categories.
@@ -85,6 +89,11 @@
   function renderDynamic() {
     applyModeClasses();
     if (ui.view === 'register' && document.getElementById('pos-cart')) { refreshCart(); return; }
+    // Customer display mirrors the live counter cart without a full reflow.
+    if (ui.view === 'backscreen') { paintBackScreen(); return; }
+    // The kiosk drives its own renders (its cart lives in UI state, not the store),
+    // so a store emit here shouldn't blow away the current stage / playing video.
+    if (ui.view === 'kiosk') return;
     renderTopbar(); render();
   }
   function applyModeClasses() {
@@ -169,6 +178,7 @@
   function render() {
     const v = $('#view'); if (!v) return;
     document.body.classList.toggle('login-view', !ui.currentUser);
+    document.body.classList.toggle('screen-view', ui.view === 'backscreen' || ui.view === 'kiosk');
     if (!ui.currentUser) { v.innerHTML = renderLogin(); return; }
     if (GATED_VIEWS.includes(ui.view) && !(ui.adminUnlocked || isAdminUser())) { ui.view = 'register'; }
     if (ui.view === 'register') v.innerHTML = renderPOS();
@@ -178,6 +188,8 @@
     else if (ui.view === 'menu') v.innerHTML = renderMenuManager();
     else if (ui.view === 'settings') v.innerHTML = renderSettings();
     else if (ui.view === 'audit') v.innerHTML = renderAuditLog();
+    else if (ui.view === 'backscreen') v.innerHTML = renderBackScreen();
+    else if (ui.view === 'kiosk') v.innerHTML = renderKiosk();
     if (ui.view === 'register' && ui.search) { const s = $('#search'); if (s) s.value = ui.search; }
     if (ui.view === 'orders' && ui.orderQuery) {
       const s = $('#order-search'); if (s) { s.focus(); const n = s.value.length; s.setSelectionRange(n, n); }
@@ -191,7 +203,14 @@
     const c = S.getConfig();
     const users = S.getUsers();
     return `<div class="login">
-      <img class="login-bg" src="assets/images/login-bg.jpg?v=22" alt="" aria-hidden="true">
+      <div class="login-collage" aria-hidden="true">
+        <div class="lc-panel"><img src="assets/images/login-bg.jpg?v=26" alt=""></div>
+        <div class="lc-panel lc-video">
+          <video src="${LOGIN_VIDS[0]}" autoplay muted playsinline
+            onended="UI.loginNextVid(this)" onerror="this.classList.add('gone')"></video>
+        </div>
+        <div class="lc-panel"><img src="assets/images/food-spread.jpg" alt=""></div>
+      </div>
       <div class="login-scrim" aria-hidden="true"></div>
       <div class="login-card">
         <div class="login-brand">
@@ -258,6 +277,16 @@
           <span class="hub-ico">💸</span>
           <span class="hub-label">Credit / Goodwill Refund</span>
           <span class="hub-desc">Refund without a receipt</span>
+        </button>
+        <button class="hub-tile screen-tile" onclick="UI.openBackScreen()">
+          <span class="hub-ico">🖥️</span>
+          <span class="hub-label">Customer Display</span>
+          <span class="hub-desc">Back-screen the guest reads & pays by</span>
+        </button>
+        <button class="hub-tile kiosk-tile" onclick="UI.openKiosk()">
+          <span class="hub-ico">🌳</span>
+          <span class="hub-label">Standing Order Tree</span>
+          <span class="hub-desc">Self-order kiosk · ads, membership, queue tickets</span>
         </button>
       </div>
     </div>`;
@@ -516,6 +545,16 @@
     const cart = S.getCart();
     const t = S.computeTotals(cart);
     const held = S.getHeld();
+    const cm = ui.counterMember;
+    const memberRow = cm
+      ? `<div class="cart-member on">
+           <span class="cm-star">⭐</span>
+           <span class="cm-info"><b>${esc(cm.name)}</b><em>${esc(cm.code)} · ${cm.points || 0} pts</em></span>
+           <button class="cm-x" title="Remove member" onclick="UI.clearCounterMember()">✕</button>
+         </div>`
+      : `<button class="cart-member" onclick="UI.openMemberScan()">
+           <span class="cm-star">⭐</span><span>Scan / add member</span>
+         </button>`;
 
     const lines = cart.lines.length ? cart.lines.map((line) => {
       const lt = t.lines.find((x) => x.uid === line.uid);
@@ -574,6 +613,8 @@
         </div>
         ${held.length ? `<button class="ghost-btn sm" onclick="UI.openHeld()">Suspended · ${held.length}</button>` : ''}
       </div>
+
+      ${memberRow}
 
       <div class="cart-meta">
         <input class="meta-in" placeholder="Pager number" value="${esc(cart.pager || '')}" onchange="UI.setPager(this.value)">
@@ -711,7 +752,40 @@
   const setNote = (v) => S.setCartNote(v);
   const hold = () => { S.holdOrder(); toast('Order suspended'); };
   function clear() {
-    confirmModal('Clear order?', 'All items in the current ticket will be removed.', () => { S.clearCart(); });
+    confirmModal('Clear order?', 'All items in the current ticket will be removed.', () => { ui.counterMember = null; S.clearCart(); });
+  }
+
+  /* ---- counter loyalty member (scan at checkout) ------------------------- */
+  function openMemberScan() {
+    const members = S.getMembers();
+    openModal(modalShell('⭐ Loyalty member', `
+      <div class="member-scan">
+        <p class="hint">Scan the membership card or type a code / phone number. Points are earned automatically on payment, and the customer's name shows on the customer display.</p>
+        <input id="member-code" class="big-input" placeholder="MCQ1001 or phone…" autocomplete="off"
+          onkeydown="if(event.key==='Enter'){UI.memberScanLookup();}">
+        <button class="solid-btn full" onclick="UI.memberScanLookup()">Look up member</button>
+        ${members.length ? `<div class="member-quick">
+          ${members.slice(0, 6).map((m) => `<button class="chip-btn" onclick="UI.attachCounterMember('${esc(m.code)}')">${esc(m.name)} · ${esc(m.code)}</button>`).join('')}
+        </div>` : ''}
+      </div>`, { size: 'sm' }));
+    setTimeout(() => { const el = $('#member-code'); if (el && !KBD_TOUCH) el.focus(); }, 60);
+  }
+  function memberScanLookup() { const el = $('#member-code'); attachCounterMember(el ? el.value : ''); }
+  function attachCounterMember(code) {
+    const m = S.findMember(code);
+    if (!m) return toast('Membership not found — check the code');
+    ui.counterMember = m;
+    closeModal();
+    refreshCart();
+    toast('⭐ ' + String(m.name).split(' ')[0] + ' added · ' + (m.points || 0) + ' pts');
+    if (payState) renderPaymentModal();   // reflect on an open checkout
+    broadcastLive();
+  }
+  function clearCounterMember() {
+    ui.counterMember = null;
+    refreshCart();
+    if (payState) renderPaymentModal();
+    broadcastLive();
   }
 
   /* ====================================================================== *
@@ -764,6 +838,9 @@
   function closeModal() {
     const root = $('#modal-root');
     root.classList.remove('show', 'reopen'); root.innerHTML = '';
+    // Abandoning a checkout clears the live guest screen; completing it leaves the
+    // 'done' thank-you broadcast in place (completeSale set it before closing).
+    if (payState && S.getLive().mode === 'pay') S.clearLive();
     payState = null;     // stops any in-flight EFTPOS timer from re-opening the modal
     cardFlowTok = null;  // stops a refund/credit card animation from re-opening
   }
@@ -1031,9 +1108,11 @@
    * PAYMENT
    * ====================================================================== */
   let payState = null;
+  let liveDoneTimer = null;
   function openPayment() {
     const cart = S.getCart();
     if (!cart.lines.length) return;
+    clearTimeout(liveDoneTimer);
     const t = S.computeTotals(cart);
     payState = {
       total: t.total,
@@ -1055,16 +1134,52 @@
   function paymentRoundingActive(dueTotal) {
     return payState.cashRoundingAdj && Math.abs(dueTotal - payState.total) > 0.0001;
   }
+  // Mirror the live checkout to the customer-facing second screen.
+  function broadcastLive() {
+    if (!payState) return;
+    const dueTotal = paymentDueTotal();
+    const paid = payState.tenders.reduce((s, p) => s + p.amount, 0);
+    const cm = ui.counterMember;
+    S.setLive({
+      mode: 'pay',
+      total: dueTotal,
+      rounding: paymentRoundingActive(dueTotal) ? payState.cashRoundingAdj : 0,
+      tenders: payState.tenders.map((p) => ({ method: p.method, amount: p.amount })),
+      paid: S.round2(paid),
+      remaining: S.round2(Math.max(0, dueTotal - paid)),
+      change: S.round2(Math.max(0, paid - dueTotal)),
+      settled: paid >= dueTotal - 0.0001,
+      method: payState.method,
+      cashEntry: payState.cashInput ? (parseFloat(payState.cashInput) || 0) : null,
+      cardStage: payState.cardStage || null,
+      cardAmount: payState.cardStage ? (payState.cardAmount || 0) : null,
+      member: cm ? { name: cm.name, code: cm.code, points: cm.points || 0 } : null
+    });
+  }
   function renderPaymentModal() {
     const cfg = S.getConfig();
+    const cart = S.getCart();
+    const t = S.computeTotals(cart);
     const dueTotal = paymentDueTotal();
     const paid = payState.tenders.reduce((s, p) => s + p.amount, 0);
     const remaining = S.round2(Math.max(0, dueTotal - paid));
     const change = S.round2(Math.max(0, paid - dueTotal));
     const settled = paid >= dueTotal - 0.0001;
-    const roundingRow = paymentRoundingActive(dueTotal)
-      ? `<div class="tender-row muted"><span>Cash rounding</span><span>${money(payState.cashRoundingAdj)}</span></div>` : '';
+    const cm = ui.counterMember;
 
+    // --- left: live order recap so the cashier & guest see what's being paid ---
+    const recapLines = t.lines.map((l) => `
+      <div class="pr-line">
+        <span class="pr-q">${l.qty}×</span>
+        <span class="pr-n">${esc(l.name)}${(l.addons && l.addons.length) ? `<em>+ ${l.addons.map((a) => esc(a.name)).join(', ')}</em>` : ''}</span>
+        <span class="pr-a">${money(l.lineNet)}</span>
+      </div>`).join('');
+    const estPts = Math.max(0, Math.floor(dueTotal * (cfg.pointsPerDollar || 1)));
+    const recapMember = cm
+      ? `<div class="pr-member">⭐ <b>${esc(cm.name)}</b> · ${cm.points || 0} pts <span>earns +${estPts}</span></div>`
+      : `<button class="pr-addmember" onclick="UI.openMemberScan()">⭐ Add loyalty member</button>`;
+
+    // --- right: tender pads (cash keypad / EFTPOS / other) ---
     const denoms = [5, 10, 20, 50, 100];
     const cashPad = `
       <div class="pay-cash">
@@ -1096,33 +1211,47 @@
         <span>${money(p.amount)} <button class="mini-x" onclick="UI.payRemove(${i})">✕</button></span>
       </div>`).join('')}
     </div>` : '';
+    const roundingRow = paymentRoundingActive(dueTotal)
+      ? `<div class="tender-row muted"><span>Cash rounding</span><span>${money(payState.cashRoundingAdj)}</span></div>` : '';
 
-    openModal(modalShell('Payment', `
-      <div class="pay-wrap">
-        <div class="pay-summary">
-          <div class="pay-due">
+    openModal(modalShell('💳 Checkout', `
+      <div class="pay2">
+        <aside class="pay2-recap">
+          <div class="pay2-recap-head">
+            <span>🧾 Order · ${t.itemCount} item${t.itemCount !== 1 ? 's' : ''}</span>
+            <span class="pay2-type">${cart.orderType === 'dine-in' ? '🍽️ Dine-in' : '🥡 Take-away'}${cart.pager ? ' · #' + esc(cart.pager) : ''}</span>
+          </div>
+          <div class="pay2-recap-list">${recapLines}</div>
+          ${recapMember}
+        </aside>
+
+        <section class="pay2-money">
+          <div class="pay2-due">
             <span>Total due</span><strong>${money(dueTotal)}</strong>
           </div>
-          ${roundingRow}
-          ${tendersList}
-          <div class="pay-stat">
-            <div><span>Tendered</span><b>${money(paid)}</b></div>
-            <div><span>${change > 0 ? 'Change' : 'Remaining'}</span>
-              <b class="${change > 0 ? 'change' : 'remain'}">${money(change > 0 ? change : remaining)}</b></div>
+          ${tendersList}${roundingRow}
+          <div class="pay2-stat">
+            <div class="received"><span>Tendered</span><b>${money(paid)}</b></div>
+            <div class="${change > 0 ? 'change' : 'remain'}">
+              <span>${change > 0 ? '💸 Change due' : 'Remaining'}</span>
+              <b>${money(change > 0 ? change : remaining)}</b>
+            </div>
           </div>
           <button class="complete-btn" ${settled ? '' : 'disabled'} onclick="UI.completeSale()">
-            ✓ Complete sale
+            ✓ Complete sale · ${money(dueTotal)}
           </button>
-        </div>
-        <div class="pay-method">
+        </section>
+
+        <section class="pay2-method">
           <div class="seg full">
             <button class="${payState.method === 'cash' ? 'on' : ''}" onclick="UI.payMethod('cash')">💵 Cash</button>
             <button class="${payState.method === 'card' ? 'on' : ''}" onclick="UI.payMethod('card')">💳 Card</button>
             <button class="${payState.method === 'other' ? 'on' : ''}" onclick="UI.payMethod('other')">🏦 Other</button>
           </div>
           ${payState.method === 'cash' ? cashPad : (payState.method === 'card' ? cardPad : otherPad)}
-        </div>
-      </div>`, { size: 'lg' }));
+        </section>
+      </div>`, { size: 'xl' }));
+    broadcastLive();
   }
 
   // EFTPOS terminal simulation — the amount is "pushed" to the card machine.
@@ -1201,9 +1330,11 @@
   function payCardCancel() { payState.cardStage = null; payState.cardToken = null; renderPaymentModal(); }
 
   function payMethod(m) { payState.method = m; payState.cashInput = ''; payState.cardStage = null; payState.cardToken = null; renderPaymentModal(); }
-  // Surgical — only the cash display changes while keying in an amount.
+  // Surgical — only the cash display changes while keying in an amount, but the
+  // guest's second screen is updated live so they watch their cash being entered.
   function syncCashDisplay() {
     const el = $('#cash-display'); if (el) el.textContent = S.getConfig().currency + (payState.cashInput || '0');
+    broadcastLive();
   }
   function payKey(k) {
     if (k === '⌫') { payState.cashInput = payState.cashInput.slice(0, -1); }
@@ -1236,9 +1367,32 @@
   }
   function payRemove(i) { payState.tenders.splice(i, 1); renderPaymentModal(); }
   function completeSale() {
-    const order = S.completeOrder(payState.tenders, { training: S.isTrainingMode() });
+    const cm = ui.counterMember;
+    const order = S.completeOrder(payState.tenders, {
+      training: S.isTrainingMode(),
+      memberId: cm ? cm.id : null
+    });
     if (!order) return toast('Payment is not fully tendered');
+    // Push a big THANK-YOU (with the member's name) to the guest screen, then
+    // auto-return it to the welcome/order screen a few seconds later.
+    const change = order.change || 0;
+    S.setLive({
+      mode: 'done',
+      code: order.code,
+      pager: order.pager || '',
+      orderType: order.orderType,
+      total: order.totals.total,
+      paid: order.paid,
+      change,
+      payments: (order.payments || []).map((p) => ({ method: p.method, amount: p.amount })),
+      customerName: cm ? cm.name : (order.customer || ''),
+      points: order.pointsEarned || 0,
+      memberPoints: cm ? (S.findMember(cm.code) || cm).points : null
+    });
+    ui.counterMember = null;
     closeModal();
+    clearTimeout(liveDoneTimer);
+    liveDoneTimer = setTimeout(() => S.clearLive(), 9000);
     showReceipt(order, true);
   }
 
@@ -2539,6 +2693,450 @@
   }
 
   /* ====================================================================== *
+   * CUSTOMER DISPLAY  (back screen the guest reads — mirrors the live cart)
+   * ====================================================================== */
+  function openBackScreen() { ui.view = 'backscreen'; renderTopbar(); render(); }
+  function exitScreen() { clearTimeout(kioskDoneTimer); ui.view = 'admin'; renderTopbar(); render(); }
+
+  // A live broadcast is only honoured for a short window so a window that loads
+  // with a stale payment/thank-you in storage falls back to the order screen.
+  let backScreenTimer = null;
+  function liveFresh(live) {
+    if (!live || !live.ts) return false;
+    const age = Date.now() - live.ts;
+    if (live.mode === 'done') return age < 12000;
+    if (live.mode === 'pay') return age < 180000;
+    return false;
+  }
+  const tenderIcon = (m) => (m === 'cash' ? '💵' : m === 'card' ? '💳' : '🏦');
+
+  // Full shell — the brand/video half is static so surgical repaints
+  // (paintBackScreen) never restart the looping video during live payment.
+  function renderBackScreen() {
+    const c = S.getConfig();
+    const parts = backScreenParts();
+    return `<div class="cust2${parts.rootClass}">
+      <button class="screen-exit" onclick="UI.exitScreen()" title="Exit to admin">✕</button>
+      <div class="cust2-media">
+        <video class="cust2-vid" src="assets/videos/vid-847.mp4" autoplay muted loop playsinline onerror="this.classList.add('gone')"></video>
+        <div class="cust2-media-scrim" aria-hidden="true"></div>
+        <div class="cust2-brand">
+          ${c.logo ? `<img class="cust2-logo" src="${esc(c.logo)}" alt="">` : ''}
+          <div class="cust2-name">${esc(c.storeName)}</div>
+          <div class="cust2-tag">${esc(c.tagline)}</div>
+          <div class="cust2-lanterns" aria-hidden="true"><span>🏮</span><span>🏮</span><span>🏮</span></div>
+          <div class="cust2-welcome">Xin chào · Welcome 🌸</div>
+        </div>
+      </div>
+      <div class="cust2-order">${parts.order}</div>
+    </div>`;
+  }
+  // Repaint just the dynamic half + root class — keeps the <video> element alive.
+  function paintBackScreen() {
+    const root = $('#view'); if (!root) return;
+    const shell = root.querySelector('.cust2');
+    const order = shell && shell.querySelector('.cust2-order');
+    if (!shell || !order) { root.innerHTML = renderBackScreen(); return; }
+    const parts = backScreenParts();
+    shell.className = 'cust2' + parts.rootClass;
+    order.innerHTML = parts.order;
+  }
+
+  // Returns { rootClass, order } for the customer display's right (order) half.
+  function backScreenParts() {
+    const cart = S.getCart();
+    const t = S.computeTotals(cart);
+    const c = S.getConfig();
+    const live = S.getLive();
+    const fresh = liveFresh(live);
+    const bg = `<img class="cust2-order-bg" src="assets/images/food-spread.jpg" alt="" aria-hidden="true">
+      <div class="cust2-order-veil" aria-hidden="true"></div>`;
+
+    // Self-revert the thank-you even if the counter window is closed.
+    clearTimeout(backScreenTimer);
+    if (fresh && live.mode === 'done') {
+      backScreenTimer = setTimeout(() => { if (ui.view === 'backscreen') paintBackScreen(); },
+        Math.max(600, 12000 - (Date.now() - live.ts)));
+    }
+
+    // ---- THANK YOU (payment complete) ------------------------------------
+    if (fresh && live.mode === 'done') {
+      const name = (live.customerName || '').trim();
+      const firstName = name ? esc(name.split(' ')[0]) : '';
+      return { rootClass: ' is-thanks', order: `${bg}
+        <div class="thanks-card">
+          <div class="thanks-check">✓</div>
+          <div class="thanks-store">${esc(c.storeName)}</div>
+          <h1 class="thanks-title">Thank you${firstName ? ', ' + firstName : ''}! 🌸</h1>
+          <div class="thanks-sub">Cảm ơn quý khách đã ghé ${esc(c.storeName)}</div>
+          <div class="thanks-meta">
+            <span class="tm-order">Order #${esc(live.code || '')}</span>
+            ${live.pager ? `<span class="tm-pager">📟 Pager ${esc(live.pager)}</span>` : ''}
+            <span class="tm-type">${live.orderType === 'dine-in' ? '🍜 Dine-in' : '🥡 Take-away'}</span>
+          </div>
+          <div class="thanks-money">
+            <div class="tmo paid"><span>Paid</span><b>${money(live.paid != null ? live.paid : live.total)}</b></div>
+            ${live.change > 0 ? `<div class="tmo change"><span>💸 Your change</span><b>${money(live.change)}</b></div>` : ''}
+          </div>
+          ${(live.payments && live.payments.length) ? `<div class="thanks-tenders">
+            ${live.payments.map((p) => `<span>${tenderIcon(p.method)} ${cap(p.method)} ${money(p.amount)}</span>`).join('')}
+          </div>` : ''}
+          ${live.points ? `<div class="thanks-points">⭐ +${live.points} points earned${live.memberPoints != null ? ` · ${live.memberPoints} total` : ''}</div>` : ''}
+          <div class="thanks-foot">Hẹn gặp lại quý khách · See you again 💛</div>
+        </div>` };
+    }
+
+    // ---- ORDER / LIVE PAYMENT --------------------------------------------
+    const paying = fresh && live.mode === 'pay';
+    const empty = !t.lines.length && !paying;
+    const dueTotal = paying ? live.total : t.total;
+
+    if (empty) {
+      return { rootClass: '', order: `${bg}
+        <div class="cust2-card is-empty">
+          <div class="cust2-empty">
+            <div class="cust2-empty-ico">🥢</div>
+            <h2>Welcome to ${esc(c.storeName)}</h2>
+            <p>Your items will appear here as we add them.</p>
+          </div>
+        </div>` };
+    }
+
+    const memberBadge = (paying && live.member)
+      ? `<div class="cust2-member">⭐ Welcome back, ${esc(String(live.member.name).split(' ')[0])} · ${live.member.points} pts</div>` : '';
+
+    let foot;
+    if (paying) {
+      const ledger = (live.tenders || []).map((p) =>
+        `<div class="cpl-row"><span>${tenderIcon(p.method)} ${cap(p.method)}</span><b>${money(p.amount)}</b></div>`).join('');
+      const entry = live.cashEntry ? `<div class="cpl-row entry"><span>💵 Counting…</span><b>${money(live.cashEntry)}</b></div>` : '';
+      const cardWaiting = live.cardStage === 'waiting'
+        ? `<div class="cpl-row entry"><span>💳 Card · tap or insert…</span><b>${money(live.cardAmount)}</b></div>` : '';
+      let status;
+      if (live.change > 0) status = `<div class="cps change"><span>💸 Change due</span><b>${money(live.change)}</b></div>`;
+      else if (live.remaining > 0) status = `<div class="cps remain"><span>Left to pay</span><b>${money(live.remaining)}</b></div>`;
+      else status = `<div class="cps settled">✓ Paid in full · Cảm ơn!</div>`;
+      foot = `
+        <div class="cust2-foot paying">
+          <div class="cust-total-row"><span>Total to pay</span><b>${money(dueTotal)}</b></div>
+          ${ledger || entry || cardWaiting ? `<div class="cust-ledger">${ledger}${entry}${cardWaiting}
+            ${(live.tenders && live.tenders.length) ? `<div class="cpl-row sum"><span>Received</span><b>${money(live.paid)}</b></div>` : ''}
+          </div>` : ''}
+          ${status}
+        </div>`;
+    } else {
+      foot = `
+        <div class="cust2-foot">
+          ${t.totalDiscount > 0 ? `<div class="cust-save">🎉 You save ${money(t.totalDiscount)}</div>` : ''}
+          <div class="cust-total-row"><span>Total ${t.taxInclusive ? `<em>incl. ${esc(c.taxLabel)}</em>` : ''}</span><b>${money(dueTotal)}</b></div>
+          <div class="cust-pay">Please pay at the counter · Cảm ơn quý khách 🌸</div>
+        </div>`;
+    }
+
+    return { rootClass: paying ? ' is-paying' : '', order: `${bg}
+      <div class="cust2-card">
+        <div class="cust2-card-top">
+          <span class="cust2-card-title">${paying ? '💳 Payment' : '🧾 Your order'}</span>
+          <span class="cust2-type">${cart.orderType === 'dine-in' ? '🍜 Dine-in' : '🥡 Take-away'}${cart.pager ? ' · #' + esc(cart.pager) : ''}</span>
+        </div>
+        ${memberBadge}
+        <div class="cust2-list">
+          ${t.lines.map((l) => `
+            <div class="cust-line">
+              <span class="cust-q">${l.qty}×</span>
+              <span class="cust-n">${esc(l.name)}${(l.addons && l.addons.length) ? `<em>+ ${l.addons.map((a) => esc(a.name)).join(', ')}</em>` : ''}${l.note ? `<em>“${esc(l.note)}”</em>` : ''}</span>
+              <span class="cust-amt">${money(l.lineNet)}</span>
+            </div>`).join('')}
+        </div>
+        ${foot}
+      </div>` };
+  }
+
+  /* ====================================================================== *
+   * STANDING ORDER TREE  (self-service kiosk)
+   * attract(video) → home → menu(+cart) → member → pay → done(queue ticket)
+   * Orders share the SAME daily queue number as the counter (nextDailyNo).
+   * ====================================================================== */
+  const KIOSK_ADS = ['assets/videos/ad1.mp4', 'assets/videos/ad2.mp4'];
+  const KIOSK_HOME_VIDS = ['assets/videos/vid-180.mp4', 'assets/videos/vid-223.mp4'];
+  const LOGIN_VIDS = ['assets/videos/vid-952.mp4', 'assets/videos/vid-847.mp4'];
+  let kioskCart = newKioskCart();
+  let kioskOrder = null, kioskAdIdx = 0, kioskHomeIdx = 0, kioskPayTok = null, kioskDoneTimer = null;
+  // advance a looping <video> through a playlist of clips
+  function cycleVid(v, list, key) {
+    const i = ((v.__i || 0) + 1) % list.length; v.__i = i; v.src = list[i];
+    const p = v.play(); if (p && p.catch) p.catch(() => {});
+  }
+  function kioskNextHomeAd(v) { cycleVid(v, KIOSK_HOME_VIDS); }
+  function loginNextVid(v) { cycleVid(v, LOGIN_VIDS); }
+  function newKioskCart() { return { lines: [], orderType: 'take-away', table: '', customer: '', pager: '', discount: { mode: 'none', value: 0 }, note: '' }; }
+
+  function openKiosk() {
+    kioskCart = newKioskCart(); kioskOrder = null; ui.member = null;
+    ui.kioskStage = 'attract'; ui.kioskCat = S.getCategories()[0].id; ui.kioskPayStage = 'review'; ui.kioskCartOpen = false;
+    ui.view = 'kiosk'; renderTopbar(); render();
+  }
+  function kioskPaint() { const v = $('#view'); if (v) v.innerHTML = renderKiosk(); }
+  function kioskGo(stage) { if (stage !== 'done') clearTimeout(kioskDoneTimer); if (stage !== 'menu') ui.kioskCartOpen = false; ui.kioskStage = stage; kioskPaint(); }
+  function kioskToggleCart() { ui.kioskCartOpen = !ui.kioskCartOpen; kioskPaint(); }
+  function kioskBack() { ui.kioskStage = kioskCart.lines.length ? 'menu' : 'home'; kioskPaint(); }
+  function kioskNextAd(v) { kioskAdIdx = (kioskAdIdx + 1) % KIOSK_ADS.length; v.src = KIOSK_ADS[kioskAdIdx]; const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+
+  function kioskItemCount() { return kioskCart.lines.reduce((s, l) => s + l.qty, 0); }
+  function kioskAdd(itemId) {
+    const item = S.findItem(itemId);
+    if (!item || item.available === false) return;
+    const ex = !item.isCombo && kioskCart.lines.find((l) => l.itemId === itemId && !l.isCombo
+      && !(l.addons && l.addons.length) && !(l.mods && l.mods.length) && !l.note);
+    if (ex) ex.qty += 1;
+    else kioskCart.lines.push(S.buildLine(item, { qty: 1, note: item.isCombo ? 'Choose fillings at counter' : '' }));
+    if (ui.kioskStage === 'home') ui.kioskStage = 'menu';
+    kioskPaint();
+    toast(item.name + ' added 🥢');
+  }
+  function kioskSetCat(id) { ui.kioskCat = id; kioskPaint(); }
+  function kioskQty(uid, d) {
+    const l = kioskCart.lines.find((x) => x.uid === uid); if (!l) return;
+    if (d === -99) l.qty = 0; else l.qty += d;
+    if (l.qty <= 0) kioskCart.lines = kioskCart.lines.filter((x) => x.uid !== uid);
+    if (!kioskCart.lines.length && ui.kioskStage === 'pay') ui.kioskStage = 'menu';
+    kioskPaint();
+  }
+  function kioskScan(code) {
+    const m = S.findMember(code);
+    if (!m) return toast('Membership not found — check the code');
+    ui.member = m; toast('Welcome back, ' + String(m.name).split(' ')[0] + '! ⭐');
+    kioskBack();
+  }
+  function kioskLookup() { const el = $('#kx-code'); kioskScan(el ? el.value : ''); }
+  function kioskClearMember() { ui.member = null; kioskPaint(); }
+
+  function kioskCardPay() {
+    if (!kioskCart.lines.length) return;
+    ui.kioskPayStage = 'processing'; kioskPaint();
+    const tok = Math.random().toString(36).slice(2); kioskPayTok = tok;
+    setTimeout(() => {
+      if (kioskPayTok !== tok || ui.view !== 'kiosk') return;
+      const t = S.computeTotals(kioskCart);
+      const order = S.completeOrder([{ method: 'card', amount: t.total }],
+        { cart: kioskCart, channel: 'kiosk', memberId: ui.member ? ui.member.id : null });
+      if (!order) { ui.kioskPayStage = 'review'; kioskPaint(); return toast('Order could not be placed'); }
+      kioskOrder = order;
+      if (ui.member) ui.member = S.findMember(ui.member.code) || ui.member;   // refresh points
+      kioskCart = newKioskCart();
+      ui.kioskPayStage = 'review'; ui.kioskStage = 'done'; kioskPaint();
+      kioskDoneTimer = setTimeout(() => { if (ui.view === 'kiosk' && ui.kioskStage === 'done') kioskNewOrder(); }, 12000);
+    }, 2400);
+  }
+  function kioskNewOrder() { clearTimeout(kioskDoneTimer); ui.member = null; ui.kioskStage = 'attract'; kioskPaint(); }
+
+  function kioskPopular(n) {
+    let items = [];
+    try {
+      const r = S.report(S.dayKey(Date.now() - 29 * 864e5), S.dayKey(Date.now()));
+      items = (r.itemRows || []).map((x) => x.itemId && S.findItem(x.itemId))
+        .filter((it) => it && it.available !== false);
+    } catch (e) { /* no history yet */ }
+    const curated = ['ph-mcq-special', 'bm-bbq-brisket', 'bm-trad-pork', 'cf-milk', 'sm-mango', 'rc-pork-chop', 'sz-beef', 'lm-watermelon'];
+    const have = new Set(items.map((i) => i.id));
+    curated.forEach((id) => { const it = S.findItem(id); if (it && it.available !== false && !have.has(id) && items.length < n) { items.push(it); have.add(id); } });
+    return items.slice(0, n);
+  }
+
+  function renderKiosk() {
+    const stage = ui.kioskStage;
+    const body = stage === 'home' ? kioskHome()
+      : stage === 'menu' ? kioskMenu()
+      : stage === 'member' ? kioskMember()
+      : stage === 'pay' ? kioskPayView()
+      : stage === 'done' ? kioskDone()
+      : kioskAttract();
+    return `<div class="kx-root kx-stage-${stage}">
+      <button class="screen-exit kx-exit" onclick="UI.exitScreen()" title="Exit kiosk (admin)">✕</button>
+      ${body}
+    </div>`;
+  }
+  function kioskAttract() {
+    const marquee = kioskPopular(8).map((it) => `${esc(it.name)} · ${money(it.price)}`).join('  🥢  ');
+    return `<div class="kx-attract" onclick="UI.kioskGo('home')">
+      <img class="kx-bg" src="assets/images/login-bg.jpg?v=23" alt="" aria-hidden="true">
+      <video class="kx-video" src="${KIOSK_ADS[0]}" autoplay muted playsinline
+        onended="UI.kioskNextAd(this)" onerror="this.classList.add('gone')"></video>
+      <div class="kx-attract-scrim" aria-hidden="true"></div>
+      <div class="kx-lanterns" aria-hidden="true">${'<span>🏮</span>'.repeat(6)}</div>
+      <div class="kx-attract-inner">
+        <img class="kx-hero" src="assets/images/vietnam-hero.jpg" alt="Vietnam">
+        <div class="kx-eyebrow">${esc(S.getConfig().storeName)} · Vietnamese Street Food</div>
+        <h1 class="kx-tap-h">Chạm để gọi món</h1>
+        <p class="kx-tap-sub">Tap anywhere to start your order</p>
+        <div class="kx-tap-pulse"><span></span></div>
+      </div>
+      ${marquee ? `<div class="kx-marquee" aria-hidden="true"><div class="kx-marquee-track">${marquee}  🥢  ${marquee}</div></div>` : ''}
+    </div>`;
+  }
+  function kioskBar() {
+    const m = ui.member;
+    const c = S.getConfig();
+    return `<header class="kx-bar">
+      <button class="kx-brand" onclick="UI.kioskGo('home')">
+        ${c.logo ? `<img src="${esc(c.logo)}" alt="">` : '🌳'}<span>${esc(c.storeName)}</span>
+      </button>
+      <button class="kx-chip ${m ? 'on' : ''}" onclick="UI.kioskGo('member')">${m ? `⭐ ${esc(String(m.name).split(' ')[0])} · ${m.points} pts` : '📷 Scan member'}</button>
+    </header>`;
+  }
+  function kioskCard(item, big) {
+    const cat = S.getCategories().find((c) => c.id === item.cat) || {};
+    const soldOut = item.available === false;
+    return `<button class="kx-item ${soldOut ? 'sold' : ''} ${big ? 'big' : ''}" style="--accent:${cat.accent || '#c79a3f'}"
+      ${soldOut ? 'disabled aria-disabled="true"' : `onclick="UI.kioskAdd('${item.id}')"`}>
+      <div class="kx-item-thumb">
+        <img src="${esc(itemImage(item))}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">
+        ${soldOut ? '<span class="kx-soldtag">Sold out</span>' : '<span class="kx-add">+</span>'}
+      </div>
+      <div class="kx-item-body"><span class="kx-item-name">${esc(item.name)}</span><span class="kx-item-price">${money(item.price)}</span></div>
+    </button>`;
+  }
+  function kioskHome() {
+    const pops = kioskPopular(6);
+    const m = ui.member;
+    return `<div class="kx-home">
+      ${kioskBar()}
+      <div class="kx-home-hero">
+        <div class="kx-home-media">
+          <video class="kx-home-vid" src="${KIOSK_HOME_VIDS[0]}" autoplay muted playsinline
+            onended="UI.kioskNextHomeAd(this)" onerror="this.classList.add('gone')"></video>
+          <div class="kx-home-media-fb" aria-hidden="true"><img src="assets/images/vietnam-hero.jpg" alt=""></div>
+        </div>
+        <div class="kx-home-text">
+          <div class="kx-home-eyebrow">🥢 Vietnamese Street Food</div>
+          <h1>Order fresh.<br>Eat happy.</h1>
+          <p>Authentic Vietnamese street food — freshly made to order.</p>
+          <button class="kx-start" onclick="UI.kioskGo('menu')">Start your order →</button>
+          <button class="kx-member-cta ${m ? 'on' : ''}" onclick="UI.kioskGo('member')">
+            ${m ? `⭐ ${esc(m.name)} · ${m.points} points` : '📷 Scan membership to earn points'}
+          </button>
+        </div>
+      </div>
+      <div class="kx-pop">
+        <div class="kx-pop-head">🔥 Popular right now</div>
+        <div class="kx-pop-row">${pops.map((it) => kioskCard(it, true)).join('')}</div>
+      </div>
+    </div>`;
+  }
+  function kioskMenu() {
+    const cats = S.getCategories();
+    const activeCat = ui.kioskCat || cats[0].id;
+    const items = S.itemsByCategory(activeCat);
+    const t = S.computeTotals(kioskCart);
+    return `<div class="kx-menu">
+      ${kioskBar()}
+      <div class="kx-menu-grid-wrap">
+        <div class="kx-cats">
+          ${cats.map((c) => `<button class="kx-cat ${c.id === activeCat ? 'on' : ''}" style="--accent:${c.accent}" onclick="UI.kioskSetCat('${c.id}')"><span class="kx-cat-ico">${c.icon}</span>${esc(c.name)}</button>`).join('')}
+        </div>
+        <div class="kx-grid">${items.length ? items.map((it) => kioskCard(it)).join('') : '<div class="kx-empty">No items in this section.</div>'}</div>
+      </div>
+      <aside class="kx-cart ${ui.kioskCartOpen ? 'open' : ''} ${kioskItemCount() ? 'has' : ''}">
+        <button class="kx-cart-peek" onclick="UI.kioskToggleCart()">
+          <span class="kx-peek-ico">🧺</span>
+          <span class="kx-peek-info"><b>${kioskItemCount()} item${kioskItemCount() === 1 ? '' : 's'}</b><span>${money(t.total)}</span></span>
+          <span class="kx-peek-chev">${ui.kioskCartOpen ? '▾' : '▴'}</span>
+        </button>
+        <div class="kx-cart-scroll">
+          <div class="kx-cart-head">🧺 Your order <span class="kx-cart-count">${kioskItemCount()}</span></div>
+          <div class="kx-cart-list">
+            ${kioskCart.lines.length ? t.lines.map((l) => `
+              <div class="kx-cl">
+                <div class="kx-cl-top"><span class="kx-cl-name">${esc(l.name)}</span><b>${money(l.lineNet)}</b></div>
+                ${l.note ? `<div class="kx-cl-note">${esc(l.note)}</div>` : ''}
+                <div class="kx-cl-step">
+                  <button onclick="UI.kioskQty('${l.uid}',-1)">−</button>
+                  <span>${l.qty}</span>
+                  <button onclick="UI.kioskQty('${l.uid}',1)">+</button>
+                  <button class="kx-cl-rm" onclick="UI.kioskQty('${l.uid}',-99)" title="Remove">🗑</button>
+                </div>
+              </div>`).join('') : '<div class="kx-cart-empty"><span>🥢</span>Tap dishes to add them here</div>'}
+          </div>
+        </div>
+        <div class="kx-cart-foot">
+          <div class="kx-cart-total"><span>Total</span><b>${money(t.total)}</b></div>
+          <button class="kx-checkout" ${kioskCart.lines.length ? '' : 'disabled'} onclick="UI.kioskGo('pay')">Checkout →</button>
+        </div>
+      </aside>
+    </div>`;
+  }
+  function kioskMember() {
+    const members = S.getMembers();
+    const m = ui.member;
+    return `<div class="kx-member">
+      ${kioskBar()}
+      <div class="kx-member-inner">
+        <button class="kx-back" onclick="UI.kioskBack()">← Back</button>
+        <h2>Membership rewards</h2>
+        <p class="kx-member-sub">Scan your card or enter your member code / phone — earn ${S.getConfig().pointsPerDollar || 1} point per ${esc(S.getConfig().currency)}1 spent.</p>
+        ${m ? `<div class="kx-mcard found"><div class="kx-mc-star">⭐</div><div class="kx-mc-info"><div class="kx-mc-name">${esc(m.name)}</div><div class="kx-mc-pts">${m.points} points</div></div><button class="kx-mc-clear" onclick="UI.kioskClearMember()">Sign out</button></div>` : ''}
+        <div class="kx-scan">
+          <input id="kx-code" class="kx-code-in" placeholder="e.g. MCQ1001 or phone" autocomplete="off">
+          <button class="kx-lookup" onclick="UI.kioskLookup()">🔎 Look up</button>
+        </div>
+        <div class="kx-demo">
+          <span class="kx-demo-label">Demo cards — tap to “scan”:</span>
+          <div class="kx-demo-row">${members.map((mm) => `<button class="kx-demo-b" onclick="UI.kioskScan('${esc(mm.code)}')"><b>${esc(mm.code)}</b>${esc(mm.name)} · ${mm.points}pts</button>`).join('')}</div>
+        </div>
+        <button class="kx-guest" onclick="UI.kioskBack()">Continue as guest →</button>
+      </div>
+    </div>`;
+  }
+  function kioskPayView() {
+    const t = S.computeTotals(kioskCart);
+    const m = ui.member;
+    const earn = Math.max(0, Math.floor(t.total * (S.getConfig().pointsPerDollar || 1)));
+    if (ui.kioskPayStage === 'processing') {
+      return `<div class="kx-pay processing">
+        <div class="kx-proc">
+          <div class="kx-proc-card">💳</div>
+          <div class="eftpos-spin"></div>
+          <div class="kx-proc-amt">${money(t.total)}</div>
+          <div class="kx-proc-txt">Processing payment… please tap or insert your card</div>
+        </div>
+      </div>`;
+    }
+    return `<div class="kx-pay">
+      ${kioskBar()}
+      <div class="kx-pay-inner">
+        <button class="kx-back" onclick="UI.kioskGo('menu')">← Back to menu</button>
+        <h2>Review &amp; pay</h2>
+        <div class="kx-pay-list">
+          ${t.lines.map((l) => `<div class="kx-pl"><span>${l.qty}× ${esc(l.name)}</span><b>${money(l.lineNet)}</b></div>`).join('')}
+        </div>
+        ${t.totalDiscount > 0 ? `<div class="kx-pay-save">Promo savings −${money(t.totalDiscount)}</div>` : ''}
+        <div class="kx-pay-total"><span>Total ${t.taxInclusive ? `<em>incl. ${esc(S.getConfig().taxLabel)}</em>` : ''}</span><b>${money(t.total)}</b></div>
+        ${m ? `<div class="kx-pay-member">⭐ ${esc(m.name)} — earn <b>${earn} pts</b> (balance → ${m.points + earn})</div>`
+            : `<button class="kx-pay-member add" onclick="UI.kioskGo('member')">📷 Add membership to earn ${earn} points</button>`}
+        <button class="kx-paybtn" onclick="UI.kioskCardPay()">💳 Pay by card · ${money(t.total)}</button>
+        <div class="kx-pay-note">Paying cash? Please order at the counter instead. 🌸</div>
+      </div>
+    </div>`;
+  }
+  function kioskDone() {
+    const o = kioskOrder;
+    if (!o) return kioskAttract();
+    return `<div class="kx-done">
+      <img class="kx-bg" src="assets/images/login-bg.jpg?v=22" alt="" aria-hidden="true">
+      <div class="kx-attract-scrim" aria-hidden="true"></div>
+      <div class="kx-done-inner">
+        <div class="kx-check">✓</div>
+        <h2>Order placed!</h2>
+        <p class="kx-done-q">Your queue number</p>
+        <div class="kx-ticket">${esc(o.code)}</div>
+        <p class="kx-done-sub">Please collect at the counter when your number is called.</p>
+        ${(o.memberId && o.pointsEarned) ? `<div class="kx-done-pts">⭐ +${o.pointsEarned} points earned</div>` : ''}
+        <button class="kx-newbtn" onclick="UI.kioskNewOrder()">New order</button>
+      </div>
+    </div>`;
+  }
+
+  /* ====================================================================== *
    * ON-SCREEN KEYBOARD  (touch devices — notes, customer, table, pager…)
    * The native keyboard still works; this guarantees text entry on a
    * keyboard-less touchscreen / kiosk. Auto-opens on a COARSE pointer only,
@@ -2669,6 +3267,8 @@
     // payment
     openPayment, payMethod, payKey, payAddCash, payExact, payTenderCash, payTenderFull, payRemove, completeSale,
     payCardSend, payCardCancel, cardSetAmt,
+    // counter loyalty member
+    openMemberScan, memberScanLookup, attachCounterMember, clearCounterMember,
     // receipt / orders
     printReceipt, viewReceipt, setHistoryDay, reprintLast, onOrderSearch, clearOrderSearch,
     // credit & till
@@ -2686,7 +3286,10 @@
     promoNew, promoEdit, promoDel, promoSet, promoSetCat, promoExcl, promoSave,
     // settings / staff
     saveSettings, togglePromo, uploadLogo, removeLogo, exportData, importPrompt, resetData,
-    userSet, userAdd, userDel
+    userSet, userAdd, userDel,
+    // customer display + standing order tree (kiosk)
+    openBackScreen, exitScreen, openKiosk, kioskGo, kioskBack, kioskNextAd, kioskNextHomeAd, loginNextVid, kioskToggleCart,
+    kioskAdd, kioskSetCat, kioskQty, kioskScan, kioskLookup, kioskClearMember, kioskCardPay, kioskNewOrder
   };
 
   document.addEventListener('DOMContentLoaded', init);
@@ -2712,4 +3315,15 @@
       }, 90);
     });
   }
+
+  // Cross-window sync: open the Customer Display (or kiosk) in a second browser
+  // window/tab on a guest-facing monitor and it updates live as the counter
+  // rings items or an item is marked sold out.
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key !== 'mcq_pos_state_v1') return;
+    S.load();
+    if (ui.view === 'backscreen') { paintBackScreen(); }
+    else if (ui.view === 'kiosk' && ui.kioskStage === 'menu') { const v = $('#view'); if (v) v.innerHTML = renderKiosk(); }
+    else if (ui.view === 'register' && document.getElementById('pos-cart')) { refreshGrid(); refreshCart(); }
+  });
 })(window);
