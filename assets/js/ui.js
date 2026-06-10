@@ -3003,7 +3003,9 @@
     view_checkout: { en: 'View & checkout', vi: 'Xem & thanh toán' },
     add_more:     { en: 'Add more items', vi: 'Thêm món khác' },
     how_serve:    { en: 'How would you like your order?', vi: 'Bạn dùng tại quán hay mang đi?' },
-    incl:         { en: 'incl.', vi: 'đã gồm' }
+    incl:         { en: 'incl.', vi: 'đã gồm' },
+    print_receipt: { en: 'Print receipt', vi: 'In hoá đơn' },
+    save_pdf:     { en: 'Save PDF', vi: 'Tải PDF' }
   };
   function kt(k) { const e = KT_DICT[k]; return e ? (e[ui.kioskLang] || e.en) : k; }
 
@@ -3143,6 +3145,9 @@
     setTimeout(() => {
       if (kioskPayTok !== tok || ui.view !== 'kiosk') return;
       const t = S.computeTotals(kioskCart);
+      // Stamp the member's name onto the ticket so the counter can also look the
+      // sale up by customer name (queue # / order id always work regardless).
+      if (ui.member) kioskCart.customer = ui.member.name;
       const order = S.completeOrder([{ method: 'card', amount: t.total }],
         { cart: kioskCart, channel: 'kiosk', memberId: ui.member ? ui.member.id : null });
       if (!order) { ui.kioskPayStage = 'review'; kioskPaint(); return toast('Order could not be placed'); }
@@ -3150,8 +3155,30 @@
       if (ui.member) ui.member = S.findMember(ui.member.code) || ui.member;   // refresh points
       kioskCart = newKioskCart();
       ui.kioskPayStage = 'review'; ui.kioskStage = 'done'; kioskPaint();
-      kioskDoneTimer = setTimeout(() => { if (ui.view === 'kiosk' && ui.kioskStage === 'done') kioskNewOrder(); }, 12000);
+      kioskBumpDone();
     }, 2400);
+  }
+  // Keep the confirmation (queue number + receipt buttons) on screen long enough
+  // to read/print, and push the auto-reset back whenever the guest interacts.
+  function kioskBumpDone() {
+    clearTimeout(kioskDoneTimer);
+    kioskDoneTimer = setTimeout(() => { if (ui.view === 'kiosk' && ui.kioskStage === 'done') kioskNewOrder(); }, 30000);
+  }
+  // Print / save-PDF the kiosk receipt. The completed order is already in the
+  // shared history, so this renders the very same receipt the counter reprints.
+  function kioskPrintReceipt() { if (!kioskOrder) return; kioskBumpDone(); printReceipt(kioskOrder.id); }
+  function kioskSavePdf() {
+    if (!kioskOrder) return;
+    kioskBumpDone();
+    const o = kioskOrder, area = $('#print-area'); if (!area) return;
+    area.classList.remove('report-mode');
+    area.innerHTML = receiptHTML(o, true);
+    const prev = document.title;                       // becomes the default PDF filename
+    document.title = (S.getConfig().storeName || 'MCQ Café') + ' Receipt ' + (o.code || ('#' + o.id));
+    const restore = () => { document.title = prev; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    toast('Tip: choose “Save as PDF” to download 📄');
+    setTimeout(() => window.print(), 60);
   }
   function kioskNewOrder() { clearTimeout(kioskDoneTimer); ui.member = null; ui.kioskFilter = 'all'; ui.kioskStage = 'attract'; kioskPaint(); }
 
@@ -3420,6 +3447,10 @@
         <h2>${kt('order_placed')}</h2>
         <p class="kx-done-q">${kt('queue_no')}</p>
         <div class="kx-ticket">${esc(o.code)}</div>
+        <div class="kx-receipt-actions">
+          <button class="kx-rc-btn" onclick="UI.kioskPrintReceipt()">🖨 ${kt('print_receipt')}</button>
+          <button class="kx-rc-btn" onclick="UI.kioskSavePdf()">⬇ ${kt('save_pdf')}</button>
+        </div>
         <p class="kx-done-sub">${kt('collect_note')}</p>
         ${(o.memberId && o.pointsEarned) ? `<div class="kx-done-pts">⭐ +${o.pointsEarned} ${kt('points')}</div>` : ''}
         <button class="kx-newbtn" onclick="UI.kioskNewOrder()">${kt('new_order')}</button>
@@ -3583,7 +3614,7 @@
     kioskAdd, kioskSetCat, kioskQty, kioskScan, kioskLookup, kioskClearMember, kioskCardPay, kioskNewOrder,
     kioskSetLang, kioskLangToggle, kioskFilterSet, kioskSetOrderType, kioskQuickAdd, kioskQuickDec,
     kioskOpenItem, kioskSheetClose, kioskSheetQty, kioskSheetAddon, kioskSheetMod, kioskSheetNote,
-    kioskComboPick, kioskSheetSave, kioskUpsellAdd
+    kioskComboPick, kioskSheetSave, kioskUpsellAdd, kioskPrintReceipt, kioskSavePdf
   };
 
   document.addEventListener('DOMContentLoaded', init);
