@@ -24,7 +24,8 @@
     // loyalty member attached to the current counter ticket (scanned at checkout)
     counterMember: null,
     // Standing Order Tree (self-service kiosk)
-    kioskStage: 'attract', kioskCat: null, kioskPayStage: 'review', member: null, kioskCartOpen: false
+    kioskStage: 'attract', kioskCat: null, kioskPayStage: 'review', member: null, kioskCartOpen: false,
+    kioskLang: 'en', kioskFilter: 'all'
   };
 
   // Top-level category navigation; the Drinks group reveals its sub-categories.
@@ -204,7 +205,7 @@
     const users = S.getUsers();
     return `<div class="login">
       <div class="login-collage" aria-hidden="true">
-        <div class="lc-panel"><img src="assets/images/login-bg.jpg?v=26" alt=""></div>
+        <div class="lc-panel"><img src="assets/images/login-bg.jpg?v=27" alt=""></div>
         <div class="lc-panel lc-video">
           <video src="${LOGIN_VIDS[0]}" autoplay muted playsinline
             onended="UI.loginNextVid(this)" onerror="this.classList.add('gone')"></video>
@@ -2862,6 +2863,7 @@
   const LOGIN_VIDS = ['assets/videos/vid-952.mp4', 'assets/videos/vid-847.mp4'];
   let kioskCart = newKioskCart();
   let kioskOrder = null, kioskAdIdx = 0, kioskHomeIdx = 0, kioskPayTok = null, kioskDoneTimer = null;
+  let kioskSheet = null, kioskIdleTimer = null;
   // advance a looping <video> through a playlist of clips
   function cycleVid(v, list, key) {
     const i = ((v.__i || 0) + 1) % list.length; v.__i = i; v.src = list[i];
@@ -2876,25 +2878,55 @@
     ui.kioskStage = 'attract'; ui.kioskCat = S.getCategories()[0].id; ui.kioskPayStage = 'review'; ui.kioskCartOpen = false;
     ui.view = 'kiosk'; renderTopbar(); render();
   }
-  function kioskPaint() { const v = $('#view'); if (v) v.innerHTML = renderKiosk(); }
+  function kioskPaint() { const v = $('#view'); if (v) v.innerHTML = renderKiosk(); armKioskIdle(); }
+
+  // Inactivity → return to the attract loop so an abandoned order never lingers.
+  function armKioskIdle() {
+    clearTimeout(kioskIdleTimer);
+    if (ui.view !== 'kiosk' || ui.kioskStage === 'attract' || ui.kioskStage === 'done') return;
+    kioskIdleTimer = setTimeout(() => {
+      if (ui.view === 'kiosk' && ui.kioskStage !== 'attract' && ui.kioskStage !== 'done') {
+        kioskCart = newKioskCart(); ui.member = null; ui.kioskFilter = 'all'; kioskSheet = null;
+        closeModal(); ui.kioskStage = 'attract'; kioskPaint();
+      }
+    }, 70000);
+  }
+
   function kioskGo(stage) { if (stage !== 'done') clearTimeout(kioskDoneTimer); if (stage !== 'menu') ui.kioskCartOpen = false; ui.kioskStage = stage; kioskPaint(); }
   function kioskToggleCart() { ui.kioskCartOpen = !ui.kioskCartOpen; kioskPaint(); }
   function kioskBack() { ui.kioskStage = kioskCart.lines.length ? 'menu' : 'home'; kioskPaint(); }
   function kioskNextAd(v) { kioskAdIdx = (kioskAdIdx + 1) % KIOSK_ADS.length; v.src = KIOSK_ADS[kioskAdIdx]; const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+  function kioskLangToggle() { ui.kioskLang = ui.kioskLang === 'en' ? 'vi' : 'en'; kioskPaint(); }
+  function kioskSetLang(l) { if (ui.kioskLang === l) return; ui.kioskLang = l; kioskPaint(); }
+  function kioskFilterSet(f) { ui.kioskFilter = f; kioskPaint(); }
 
   function kioskItemCount() { return kioskCart.lines.reduce((s, l) => s + l.qty, 0); }
-  function kioskAdd(itemId) {
+  function kioskLineQty(itemId) { return kioskCart.lines.filter((l) => l.itemId === itemId).reduce((s, l) => s + l.qty, 0); }
+  function kioskFindPlain(itemId) {
+    return kioskCart.lines.find((l) => l.itemId === itemId && !l.isCombo
+      && !(l.addons && l.addons.length) && !(l.mods && l.mods.length) && !l.note);
+  }
+  // Quick add (no options) — straight onto the cart, merging identical plain lines.
+  function kioskQuickAdd(itemId) {
     const item = S.findItem(itemId);
     if (!item || item.available === false) return;
-    const ex = !item.isCombo && kioskCart.lines.find((l) => l.itemId === itemId && !l.isCombo
-      && !(l.addons && l.addons.length) && !(l.mods && l.mods.length) && !l.note);
-    if (ex) ex.qty += 1;
-    else kioskCart.lines.push(S.buildLine(item, { qty: 1, note: item.isCombo ? 'Choose fillings at counter' : '' }));
+    if (item.isCombo) return kioskOpenItem(itemId);   // combos must pick fillings
+    const ex = kioskFindPlain(itemId);
+    if (ex) ex.qty += 1; else kioskCart.lines.push(S.buildLine(item, { qty: 1 }));
     if (ui.kioskStage === 'home') ui.kioskStage = 'menu';
     kioskPaint();
-    toast(item.name + ' added 🥢');
   }
-  function kioskSetCat(id) { ui.kioskCat = id; kioskPaint(); }
+  function kioskAdd(itemId) { kioskQuickAdd(itemId); }
+  function kioskQuickDec(itemId) {
+    const ex = kioskFindPlain(itemId) || [...kioskCart.lines].reverse().find((l) => l.itemId === itemId);
+    if (!ex) return;
+    ex.qty -= 1;
+    if (ex.qty <= 0) kioskCart.lines = kioskCart.lines.filter((l) => l !== ex);
+    if (!kioskCart.lines.length && ui.kioskStage === 'pay') ui.kioskStage = 'menu';
+    kioskPaint();
+  }
+  function kioskSetCat(id) { ui.kioskCat = id; ui.kioskFilter = 'all'; kioskPaint(); }
+  function kioskSetOrderType(t) { kioskCart.orderType = t; kioskPaint(); }
   function kioskQty(uid, d) {
     const l = kioskCart.lines.find((x) => x.uid === uid); if (!l) return;
     if (d === -99) l.qty = 0; else l.qty += d;
@@ -2906,10 +2938,203 @@
     const m = S.findMember(code);
     if (!m) return toast('Membership not found — check the code');
     ui.member = m; toast('Welcome back, ' + String(m.name).split(' ')[0] + '! ⭐');
-    kioskBack();
+    if (ui.kioskStage === 'member') kioskBack(); else kioskPaint();
   }
-  function kioskLookup() { const el = $('#kx-code'); kioskScan(el ? el.value : ''); }
+  function kioskLookup() { const el = $('#kx-code') || $('#kx-code-inline'); kioskScan(el ? el.value : ''); }
   function kioskClearMember() { ui.member = null; kioskPaint(); }
+
+  /* ---- kiosk i18n (UI chrome only — dish names stay as entered) ---------- */
+  const KT_DICT = {
+    start_order:  { en: 'Start your order →', vi: 'Bắt đầu gọi món →' },
+    scan_member:  { en: 'Scan member', vi: 'Quét thành viên' },
+    scan_cta:     { en: 'Scan membership to earn points', vi: 'Quét thành viên để tích điểm' },
+    popular_now:  { en: 'Popular right now', vi: 'Đang bán chạy' },
+    h1a:          { en: 'Order fresh.', vi: 'Đồ tươi mỗi ngày.' },
+    h1b:          { en: 'Eat happy.', vi: 'Ăn ngon mỗi bữa.' },
+    home_sub:     { en: 'Authentic Vietnamese street food — freshly made to order.', vi: 'Ẩm thực đường phố Việt — làm tươi theo yêu cầu.' },
+    street_food:  { en: 'Vietnamese Street Food', vi: 'Ẩm thực đường phố Việt' },
+    tap_h:        { en: 'Tap to order', vi: 'Chạm để gọi món' },
+    tap_sub:      { en: 'Tap anywhere to start your order', vi: 'Chạm vào màn hình để bắt đầu' },
+    all:          { en: 'All', vi: 'Tất cả' },
+    popular:      { en: 'Popular', vi: 'Bán chạy' },
+    veg:          { en: 'Veg', vi: 'Chay' },
+    spicy:        { en: 'Spicy', vi: 'Cay' },
+    new:          { en: 'New', vi: 'Mới' },
+    add:          { en: 'Add', vi: 'Thêm' },
+    choose:       { en: 'Choose', vi: 'Chọn' },
+    items:        { en: 'items', vi: 'món' },
+    your_order:   { en: 'Your order', vi: 'Đơn của bạn' },
+    review_checkout: { en: 'Review & checkout', vi: 'Xem lại & thanh toán' },
+    checkout:     { en: 'Checkout', vi: 'Thanh toán' },
+    total:        { en: 'Total', vi: 'Tổng' },
+    subtotal:     { en: 'Subtotal', vi: 'Tạm tính' },
+    promo:        { en: 'Promotion', vi: 'Khuyến mãi' },
+    review_pay:   { en: 'Review & pay', vi: 'Xem lại & thanh toán' },
+    back_menu:    { en: 'Back to menu', vi: 'Về thực đơn' },
+    dine_in:      { en: 'Dine-in', vi: 'Tại quán' },
+    take_away:    { en: 'Take-away', vi: 'Mang đi' },
+    add_drink:    { en: 'Add a drink or dessert?', vi: 'Thêm nước hoặc tráng miệng?' },
+    earn:         { en: 'earn', vi: 'tích' },
+    membership:   { en: 'Membership', vi: 'Thành viên' },
+    scan_hint:    { en: 'Card code or phone', vi: 'Mã thẻ hoặc SĐT' },
+    look_up:      { en: 'Look up', vi: 'Tra cứu' },
+    pay_card:     { en: 'Pay by card', vi: 'Thanh toán thẻ' },
+    pay_note:     { en: 'Paying cash? Please order at the counter. 🌸', vi: 'Trả tiền mặt? Vui lòng gọi món tại quầy. 🌸' },
+    choose_options: { en: 'Choose your options', vi: 'Chọn tuỳ chọn' },
+    required:     { en: 'Required', vi: 'Bắt buộc' },
+    note_kitchen: { en: 'Note for the kitchen', vi: 'Ghi chú cho bếp' },
+    note_ph:      { en: 'e.g. no coriander, extra spicy', vi: 'vd: không ngò, thêm cay' },
+    add_to_order: { en: 'Add to order ·', vi: 'Thêm vào đơn ·' },
+    step_choose:  { en: 'Choose', vi: 'Chọn món' },
+    step_review:  { en: 'Review', vi: 'Xem lại' },
+    step_pay:     { en: 'Pay', vi: 'Thanh toán' },
+    step_done:    { en: 'Queue', vi: 'Số thứ tự' },
+    order_placed: { en: 'Order placed!', vi: 'Đặt món thành công!' },
+    queue_no:     { en: 'Your queue number', vi: 'Số thứ tự của bạn' },
+    collect_note: { en: 'Please collect at the counter when your number is called.', vi: 'Vui lòng nhận món tại quầy khi gọi số của bạn.' },
+    new_order:    { en: 'New order', vi: 'Đơn mới' },
+    processing:   { en: 'Processing payment… tap or insert your card', vi: 'Đang xử lý… chạm hoặc đưa thẻ vào' },
+    empty_cart:   { en: 'Tap dishes to add them here', vi: 'Chạm món để thêm vào đây' },
+    sign_out:     { en: 'Sign out', vi: 'Đăng xuất' },
+    cont_guest:   { en: 'Continue as guest →', vi: 'Tiếp tục không thành viên →' },
+    member_rewards: { en: 'Membership rewards', vi: 'Ưu đãi thành viên' },
+    add_member_earn: { en: 'Add membership to earn', vi: 'Thêm thành viên để tích' },
+    points:       { en: 'points', vi: 'điểm' },
+    view_checkout: { en: 'View & checkout', vi: 'Xem & thanh toán' },
+    add_more:     { en: 'Add more items', vi: 'Thêm món khác' },
+    how_serve:    { en: 'How would you like your order?', vi: 'Bạn dùng tại quán hay mang đi?' },
+    incl:         { en: 'incl.', vi: 'đã gồm' }
+  };
+  function kt(k) { const e = KT_DICT[k]; return e ? (e[ui.kioskLang] || e.en) : k; }
+
+  /* ---- kiosk quick filters ---------------------------------------------- */
+  const KIOSK_NEW = ['rc-tofu-egg', 'bm-super-roll', 'ph-beef-rib', 'jc-green-glow', 'bk-banh-tieu-rubi'];
+  function kioskItemTags(it) {
+    const n = (it.name || '').toLowerCase();
+    const tags = [];
+    if (it.veg || /tofu|veg|mushroom|avocado|đậu|chay/.test(n)) tags.push('veg');
+    if (it.spicy || /bun bo hue|bún bò|spicy|chili|sa\s?tế|satay|sate|cay|tóp/.test(n)) tags.push('spicy');
+    if (it.isNew || KIOSK_NEW.includes(it.id)) tags.push('new');
+    return tags;
+  }
+  function kioskFilteredItems() {
+    const f = ui.kioskFilter;
+    if (f === 'all') return S.itemsByCategory(ui.kioskCat || S.getCategories()[0].id);
+    if (f === 'popular') return kioskPopular(30);
+    return S.getMenu().filter((it) => it.available !== false && !it.isCombo && kioskItemTags(it).includes(f));
+  }
+
+  /* ---- item detail / customise bottom-sheet ----------------------------- */
+  function kioskOpenItem(itemId) {
+    const item = S.findItem(itemId);
+    if (!item || item.available === false) return;
+    if (item.isCombo) kioskSheet = { item, combo: true, picks: item.combo.slots.map(() => null), qty: 1 };
+    else kioskSheet = { item, combo: false, addons: [], mods: [], note: '', qty: 1 };
+    renderKioskSheet();
+  }
+  function kioskSheetClose() { kioskSheet = null; closeModal(); }
+  function kioskSheetQty(d) { if (!kioskSheet) return; kioskSheet.qty = Math.max(1, kioskSheet.qty + d); renderKioskSheet(); }
+  function kioskSheetAddonQty(name, price) { const r = kioskSheet.addons.find((a) => a.name === name && a.price === price); return r ? r.qty : 0; }
+  function kioskSheetAddon(name, price, delta) {
+    let row = kioskSheet.addons.find((a) => a.name === name && a.price === price);
+    if (!row) { if (delta < 0) return; row = { name, price, qty: 0 }; kioskSheet.addons.push(row); }
+    row.qty += delta;
+    if (row.qty <= 0) kioskSheet.addons = kioskSheet.addons.filter((a) => a !== row);
+    renderKioskSheet();
+  }
+  function kioskSheetMod(name) {
+    const i = kioskSheet.mods.indexOf(name);
+    if (i >= 0) kioskSheet.mods.splice(i, 1); else kioskSheet.mods.push(name);
+    renderKioskSheet();
+  }
+  function kioskSheetNote(v) { if (kioskSheet) kioskSheet.note = v; }
+  function kioskSheetUnit() {
+    const s = kioskSheet;
+    if (s.combo) return s.item.price;
+    return (s.item.price || 0) + s.addons.reduce((a, x) => a + x.price * x.qty, 0);
+  }
+  function kioskComboPick(i, itemId) {
+    const m = S.findItem(itemId);
+    kioskSheet.picks[i] = { itemId, name: S.displayName(m), slot: kioskSheet.item.combo.slots[i].label };
+    renderKioskSheet();
+  }
+  function kioskSheetSave() {
+    const s = kioskSheet; if (!s) return;
+    if (s.combo) {
+      if (!s.picks.every((p) => p)) return toast('Please choose all options');
+      for (let i = 0; i < s.qty; i++) kioskCart.lines.push(S.buildLine(s.item, { components: s.picks.map((p) => ({ name: p.name, itemId: p.itemId, slot: p.slot })) }));
+    } else {
+      const plain = !s.addons.length && !s.mods.length && !(s.note || '').trim();
+      if (plain) { const ex = kioskFindPlain(s.item.id); if (ex) ex.qty += s.qty; else kioskCart.lines.push(S.buildLine(s.item, { qty: s.qty })); }
+      else kioskCart.lines.push(S.buildLine(s.item, { qty: s.qty, addons: s.addons, mods: s.mods, note: (s.note || '').trim() }));
+    }
+    const name = s.item.name;
+    kioskSheet = null; closeModal();
+    if (ui.kioskStage === 'home') ui.kioskStage = 'menu';
+    kioskPaint();
+    toast(name + ' added 🥢');
+  }
+  function renderKioskSheet() {
+    const s = kioskSheet; if (!s) return;
+    const item = s.item;
+    let body;
+    if (s.combo) {
+      body = item.combo.slots.map((slot, i) => {
+        const opts = S.getMenu().filter((m) => slot.from.includes(m.cat) && m.available !== false && !m.isCombo);
+        return `<div class="kxs-group">
+          <div class="kxs-group-h">${esc(slot.label)} ${s.picks[i] ? '<span class="ok">✓</span>' : `<span class="req">${kt('required')}</span>`}</div>
+          <div class="kxs-opts">${opts.map((o) => `<button class="kxs-opt ${s.picks[i] && s.picks[i].itemId === o.id ? 'sel' : ''}" onclick="UI.kioskComboPick(${i},'${o.id}')">${esc(o.name)}</button>`).join('')}</div>
+        </div>`;
+      }).join('');
+    } else {
+      const groups = S.groupsForItem(item);
+      const priced = groups.filter((g) => !g.free);
+      const free = groups.filter((g) => g.free);
+      const pricedHtml = priced.map((g) => `<div class="kxs-group"><div class="kxs-group-h">${esc(g.name)}</div>
+        <div class="kxs-rows">${g.options.map((o) => { const q = kioskSheetAddonQty(o.name, o.price); return `<div class="kxs-row ${q ? 'on' : ''}">
+          <span class="kxs-opt-n">${esc(o.name)} <em>+${money(o.price)}</em></span>
+          <div class="kx-step sm"><button onclick="UI.kioskSheetAddon('${esc(o.name)}',${o.price},-1)" ${q ? '' : 'disabled'}>−</button><b>${q}</b><button onclick="UI.kioskSheetAddon('${esc(o.name)}',${o.price},1)">＋</button></div>
+        </div>`; }).join('')}</div></div>`).join('');
+      const freeHtml = free.map((g) => `<div class="kxs-group"><div class="kxs-group-h">${esc(g.name)}</div>
+        <div class="kxs-chips">${g.options.map((o) => `<button class="kxs-chip ${s.mods.includes(o.name) ? 'on' : ''}" onclick="UI.kioskSheetMod('${esc(o.name)}')">${esc(o.name)}</button>`).join('')}</div></div>`).join('');
+      body = `${(priced.length || free.length) ? `<div class="kxs-choose">${kt('choose_options')}</div>` : ''}${pricedHtml}${freeHtml}
+        <div class="kxs-group"><div class="kxs-group-h">${kt('note_kitchen')}</div>
+          <input id="kxs-note" class="kx-code-in full" placeholder="${kt('note_ph')}" value="${esc(s.note || '')}" oninput="UI.kioskSheetNote(this.value)"></div>`;
+    }
+    const lineTotal = kioskSheetUnit() * s.qty;
+    openModal(`<div class="overlay kx-sheet-ov" onclick="UI.kioskSheetClose()">
+      <div class="kx-sheet" onclick="event.stopPropagation()">
+        <button class="kx-sheet-x" onclick="UI.kioskSheetClose()">✕</button>
+        <div class="kx-sheet-hero">
+          <img src="${esc(itemImage(item))}" alt="" onerror="this.parentNode.classList.add('noimg')">
+          <div class="kx-sheet-head">
+            <div class="kx-sheet-title"><h3>${esc(item.name)}</h3><div class="kx-sheet-sub">${esc((S.getCategories().find((c) => c.id === item.cat) || {}).name || '')}${s.combo ? ' · ' + kt('choose_options') : ''}</div></div>
+            <div class="kx-sheet-price">${money(item.price)}</div>
+          </div>
+        </div>
+        <div class="kx-sheet-body">${body}</div>
+        <div class="kx-sheet-foot">
+          <div class="kx-step lg"><button onclick="UI.kioskSheetQty(-1)">−</button><b>${s.qty}</b><button onclick="UI.kioskSheetQty(1)">＋</button></div>
+          <button class="kx-sheet-add" onclick="UI.kioskSheetSave()">${kt('add_to_order')} ${money(lineTotal)}</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  /* ---- upsell (suggest drinks / bakery before pay) ---------------------- */
+  function kioskUpsellItems() {
+    const have = new Set(kioskCart.lines.map((l) => l.itemId));
+    return S.getMenu().filter((m) => ['juice', 'smoothies', 'coffee', 'lemonade', 'bakery'].includes(m.cat)
+      && m.available !== false && !m.isCombo && !have.has(m.id)).slice(0, 6);
+  }
+  function kioskUpsellAdd(id) { kioskQuickAdd(id); }
+
+  /* ---- progress steps --------------------------------------------------- */
+  function kioskSteps(active) {
+    const steps = ['choose', 'review', 'pay', 'done'];
+    return `<div class="kx-prog">${steps.map((k, i) => `<div class="kx-prog-i ${i < active ? 'done' : ''} ${i === active ? 'on' : ''}">
+      <span class="kx-prog-no">${i < active ? '✓' : i + 1}</span><span class="kx-prog-lb">${kt('step_' + k)}</span></div>${i < steps.length - 1 ? '<span class="kx-prog-sep"></span>' : ''}`).join('')}</div>`;
+  }
 
   function kioskCardPay() {
     if (!kioskCart.lines.length) return;
@@ -2928,7 +3153,7 @@
       kioskDoneTimer = setTimeout(() => { if (ui.view === 'kiosk' && ui.kioskStage === 'done') kioskNewOrder(); }, 12000);
     }, 2400);
   }
-  function kioskNewOrder() { clearTimeout(kioskDoneTimer); ui.member = null; ui.kioskStage = 'attract'; kioskPaint(); }
+  function kioskNewOrder() { clearTimeout(kioskDoneTimer); ui.member = null; ui.kioskFilter = 'all'; ui.kioskStage = 'attract'; kioskPaint(); }
 
   function kioskPopular(n) {
     let items = [];
@@ -2965,10 +3190,8 @@
       <div class="kx-attract-scrim" aria-hidden="true"></div>
       <div class="kx-lanterns" aria-hidden="true">${'<span>🏮</span>'.repeat(6)}</div>
       <div class="kx-attract-inner">
-        <img class="kx-hero" src="assets/images/vietnam-hero.jpg" alt="Vietnam">
         <div class="kx-eyebrow">${esc(S.getConfig().storeName)} · Vietnamese Street Food</div>
-        <h1 class="kx-tap-h">Chạm để gọi món</h1>
-        <p class="kx-tap-sub">Tap anywhere to start your order</p>
+        <h1 class="kx-tap-cta">Tap anywhere<br>to start your order</h1>
         <div class="kx-tap-pulse"><span></span></div>
       </div>
       ${marquee ? `<div class="kx-marquee" aria-hidden="true"><div class="kx-marquee-track">${marquee}  🥢  ${marquee}</div></div>` : ''}
@@ -2981,20 +3204,41 @@
       <button class="kx-brand" onclick="UI.kioskGo('home')">
         ${c.logo ? `<img src="${esc(c.logo)}" alt="">` : '🌳'}<span>${esc(c.storeName)}</span>
       </button>
-      <button class="kx-chip ${m ? 'on' : ''}" onclick="UI.kioskGo('member')">${m ? `⭐ ${esc(String(m.name).split(' ')[0])} · ${m.points} pts` : '📷 Scan member'}</button>
+      <div class="kx-bar-right">
+        <div class="kx-lang" role="group" aria-label="Language">
+          <button class="${ui.kioskLang === 'en' ? 'on' : ''}" onclick="UI.kioskSetLang('en')">EN</button>
+          <button class="${ui.kioskLang === 'vi' ? 'on' : ''}" onclick="UI.kioskSetLang('vi')">VI</button>
+        </div>
+        <button class="kx-chip ${m ? 'on' : ''}" onclick="UI.kioskGo('member')">${m ? `⭐ ${esc(String(m.name).split(' ')[0])} · ${m.points} pts` : '📷 ' + kt('scan_member')}</button>
+      </div>
     </header>`;
   }
   function kioskCard(item, big) {
     const cat = S.getCategories().find((c) => c.id === item.cat) || {};
     const soldOut = item.available === false;
-    return `<button class="kx-item ${soldOut ? 'sold' : ''} ${big ? 'big' : ''}" style="--accent:${cat.accent || '#c79a3f'}"
-      ${soldOut ? 'disabled aria-disabled="true"' : `onclick="UI.kioskAdd('${item.id}')"`}>
-      <div class="kx-item-thumb">
-        <img src="${esc(itemImage(item))}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">
-        ${soldOut ? '<span class="kx-soldtag">Sold out</span>' : '<span class="kx-add">+</span>'}
-      </div>
-      <div class="kx-item-body"><span class="kx-item-name">${esc(item.name)}</span><span class="kx-item-price">${money(item.price)}</span></div>
-    </button>`;
+    const qty = kioskLineQty(item.id);
+    // After an item is in the cart the card itself becomes a stepper — so a
+    // standing customer adjusts quantity in place without opening the order.
+    const ctrl = soldOut
+      ? '<span class="kx-ctrl-sold">Sold out</span>'
+      : qty > 0
+        ? `<div class="kx-step card" onclick="event.stopPropagation()">
+             <button aria-label="Less" onclick="UI.kioskQuickDec('${item.id}')">−</button><b>${qty}</b>
+             <button aria-label="More" onclick="UI.kioskQuickAdd('${item.id}')">＋</button>
+           </div>`
+        : `<button class="kx-card-add" onclick="event.stopPropagation();UI.kioskQuickAdd('${item.id}')">＋ ${kt('add')}</button>`;
+    return `<div class="kx-item ${soldOut ? 'sold' : ''} ${big ? 'big' : ''} ${qty > 0 ? 'in-cart' : ''}" style="--accent:${cat.accent || '#c79a3f'}">
+      <button class="kx-item-tap" ${soldOut ? 'disabled aria-disabled="true"' : `onclick="UI.kioskOpenItem('${item.id}')"`}>
+        <div class="kx-item-thumb">
+          <img src="${esc(itemImage(item))}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">
+          ${qty > 0 ? `<span class="kx-qty-badge">${qty}</span>` : ''}
+          ${item.isCombo ? '<span class="kx-combo-tag">🎁 Combo</span>' : ''}
+          ${soldOut ? '<span class="kx-soldtag">Sold out</span>' : ''}
+        </div>
+        <div class="kx-item-body"><span class="kx-item-name">${esc(item.name)}</span><span class="kx-item-price">${money(item.price)}</span></div>
+      </button>
+      <div class="kx-item-ctrl">${ctrl}</div>
+    </div>`;
   }
   function kioskHome() {
     const pops = kioskPopular(6);
@@ -3008,61 +3252,50 @@
           <div class="kx-home-media-fb" aria-hidden="true"><img src="assets/images/vietnam-hero.jpg" alt=""></div>
         </div>
         <div class="kx-home-text">
-          <div class="kx-home-eyebrow">🥢 Vietnamese Street Food</div>
-          <h1>Order fresh.<br>Eat happy.</h1>
-          <p>Authentic Vietnamese street food — freshly made to order.</p>
-          <button class="kx-start" onclick="UI.kioskGo('menu')">Start your order →</button>
+          <div class="kx-home-eyebrow">🥢 ${kt('street_food')}</div>
+          <h1>${kt('h1a')}<br>${kt('h1b')}</h1>
+          <p>${kt('home_sub')}</p>
+          <button class="kx-start" onclick="UI.kioskGo('menu')">${kt('start_order')}</button>
           <button class="kx-member-cta ${m ? 'on' : ''}" onclick="UI.kioskGo('member')">
-            ${m ? `⭐ ${esc(m.name)} · ${m.points} points` : '📷 Scan membership to earn points'}
+            ${m ? `⭐ ${esc(m.name)} · ${m.points} ${kt('points')}` : '📷 ' + kt('scan_cta')}
           </button>
         </div>
       </div>
       <div class="kx-pop">
-        <div class="kx-pop-head">🔥 Popular right now</div>
+        <div class="kx-pop-head">🔥 ${kt('popular_now')}</div>
         <div class="kx-pop-row">${pops.map((it) => kioskCard(it, true)).join('')}</div>
       </div>
     </div>`;
   }
+  const KIOSK_FILTERS = [['all', '🍽️'], ['popular', '🔥'], ['veg', '🌱'], ['spicy', '🌶️'], ['new', '🆕']];
   function kioskMenu() {
     const cats = S.getCategories();
     const activeCat = ui.kioskCat || cats[0].id;
-    const items = S.itemsByCategory(activeCat);
+    const filt = ui.kioskFilter;
+    const items = kioskFilteredItems();
     const t = S.computeTotals(kioskCart);
+    const count = kioskItemCount();
+    const itemsLabel = `${count} ${count === 1 && ui.kioskLang === 'en' ? 'item' : kt('items')}`;
     return `<div class="kx-menu">
       ${kioskBar()}
-      <div class="kx-menu-grid-wrap">
-        <div class="kx-cats">
-          ${cats.map((c) => `<button class="kx-cat ${c.id === activeCat ? 'on' : ''}" style="--accent:${c.accent}" onclick="UI.kioskSetCat('${c.id}')"><span class="kx-cat-ico">${c.icon}</span>${esc(c.name)}</button>`).join('')}
-        </div>
-        <div class="kx-grid">${items.length ? items.map((it) => kioskCard(it)).join('') : '<div class="kx-empty">No items in this section.</div>'}</div>
-      </div>
-      <aside class="kx-cart ${ui.kioskCartOpen ? 'open' : ''} ${kioskItemCount() ? 'has' : ''}">
-        <button class="kx-cart-peek" onclick="UI.kioskToggleCart()">
-          <span class="kx-peek-ico">🧺</span>
-          <span class="kx-peek-info"><b>${kioskItemCount()} item${kioskItemCount() === 1 ? '' : 's'}</b><span>${money(t.total)}</span></span>
-          <span class="kx-peek-chev">${ui.kioskCartOpen ? '▾' : '▴'}</span>
-        </button>
-        <div class="kx-cart-scroll">
-          <div class="kx-cart-head">🧺 Your order <span class="kx-cart-count">${kioskItemCount()}</span></div>
-          <div class="kx-cart-list">
-            ${kioskCart.lines.length ? t.lines.map((l) => `
-              <div class="kx-cl">
-                <div class="kx-cl-top"><span class="kx-cl-name">${esc(l.name)}</span><b>${money(l.lineNet)}</b></div>
-                ${l.note ? `<div class="kx-cl-note">${esc(l.note)}</div>` : ''}
-                <div class="kx-cl-step">
-                  <button onclick="UI.kioskQty('${l.uid}',-1)">−</button>
-                  <span>${l.qty}</span>
-                  <button onclick="UI.kioskQty('${l.uid}',1)">+</button>
-                  <button class="kx-cl-rm" onclick="UI.kioskQty('${l.uid}',-99)" title="Remove">🗑</button>
-                </div>
-              </div>`).join('') : '<div class="kx-cart-empty"><span>🥢</span>Tap dishes to add them here</div>'}
+      <div class="kx-menu-body">
+        <nav class="kx-cats" aria-label="Categories">
+          ${cats.map((c) => `<button class="kx-cat ${(filt === 'all' && c.id === activeCat) ? 'on' : ''}" style="--accent:${c.accent}" onclick="UI.kioskSetCat('${c.id}')"><span class="kx-cat-ico">${c.icon}</span><span class="kx-cat-tx">${esc(c.name)}</span></button>`).join('')}
+        </nav>
+        <div class="kx-menu-main">
+          <div class="kx-filters">
+            ${KIOSK_FILTERS.map(([f, ic]) => `<button class="kx-filter ${filt === f ? 'on' : ''}" onclick="UI.kioskFilterSet('${f}')">${ic} ${kt(f)}</button>`).join('')}
           </div>
+          <div class="kx-grid">${items.length ? items.map((it) => kioskCard(it)).join('') : `<div class="kx-empty">${kt('empty_cart')}</div>`}</div>
         </div>
-        <div class="kx-cart-foot">
-          <div class="kx-cart-total"><span>Total</span><b>${money(t.total)}</b></div>
-          <button class="kx-checkout" ${kioskCart.lines.length ? '' : 'disabled'} onclick="UI.kioskGo('pay')">Checkout →</button>
-        </div>
-      </aside>
+      </div>
+      <div class="kx-bottombar ${count ? 'show' : ''}">
+        <button class="kx-bb-main" ${count ? '' : 'disabled'} onclick="UI.kioskGo('pay')">
+          <span class="kx-bb-basket">🧺<span class="kx-bb-count">${count}</span></span>
+          <span class="kx-bb-info"><b>${itemsLabel}</b><span>${money(t.total)}</span></span>
+          <span class="kx-bb-cta">${kt('view_checkout')} →</span>
+        </button>
+      </div>
     </div>`;
   }
   function kioskMember() {
@@ -3071,50 +3304,107 @@
     return `<div class="kx-member">
       ${kioskBar()}
       <div class="kx-member-inner">
-        <button class="kx-back" onclick="UI.kioskBack()">← Back</button>
-        <h2>Membership rewards</h2>
-        <p class="kx-member-sub">Scan your card or enter your member code / phone — earn ${S.getConfig().pointsPerDollar || 1} point per ${esc(S.getConfig().currency)}1 spent.</p>
-        ${m ? `<div class="kx-mcard found"><div class="kx-mc-star">⭐</div><div class="kx-mc-info"><div class="kx-mc-name">${esc(m.name)}</div><div class="kx-mc-pts">${m.points} points</div></div><button class="kx-mc-clear" onclick="UI.kioskClearMember()">Sign out</button></div>` : ''}
+        <button class="kx-back" onclick="UI.kioskBack()">← ${kt('back_menu')}</button>
+        <h2>${kt('member_rewards')}</h2>
+        <p class="kx-member-sub">${kt('scan_cta')} — ${S.getConfig().pointsPerDollar || 1} ${kt('points')} / ${esc(S.getConfig().currency)}1.</p>
+        ${m ? `<div class="kx-mcard found"><div class="kx-mc-star">⭐</div><div class="kx-mc-info"><div class="kx-mc-name">${esc(m.name)}</div><div class="kx-mc-pts">${m.points} ${kt('points')}</div></div><button class="kx-mc-clear" onclick="UI.kioskClearMember()">${kt('sign_out')}</button></div>` : ''}
         <div class="kx-scan">
-          <input id="kx-code" class="kx-code-in" placeholder="e.g. MCQ1001 or phone" autocomplete="off">
-          <button class="kx-lookup" onclick="UI.kioskLookup()">🔎 Look up</button>
+          <input id="kx-code" class="kx-code-in" placeholder="${kt('scan_hint')}" autocomplete="off">
+          <button class="kx-lookup" onclick="UI.kioskLookup()">🔎 ${kt('look_up')}</button>
         </div>
         <div class="kx-demo">
           <span class="kx-demo-label">Demo cards — tap to “scan”:</span>
           <div class="kx-demo-row">${members.map((mm) => `<button class="kx-demo-b" onclick="UI.kioskScan('${esc(mm.code)}')"><b>${esc(mm.code)}</b>${esc(mm.name)} · ${mm.points}pts</button>`).join('')}</div>
         </div>
-        <button class="kx-guest" onclick="UI.kioskBack()">Continue as guest →</button>
+        <button class="kx-guest" onclick="UI.kioskBack()">${kt('cont_guest')}</button>
       </div>
     </div>`;
   }
   function kioskPayView() {
     const t = S.computeTotals(kioskCart);
     const m = ui.member;
-    const earn = Math.max(0, Math.floor(t.total * (S.getConfig().pointsPerDollar || 1)));
+    const c = S.getConfig();
+    const earn = Math.max(0, Math.floor(t.total * (c.pointsPerDollar || 1)));
     if (ui.kioskPayStage === 'processing') {
       return `<div class="kx-pay processing">
         <div class="kx-proc">
           <div class="kx-proc-card">💳</div>
           <div class="eftpos-spin"></div>
           <div class="kx-proc-amt">${money(t.total)}</div>
-          <div class="kx-proc-txt">Processing payment… please tap or insert your card</div>
+          <div class="kx-proc-txt">${kt('processing')}</div>
         </div>
       </div>`;
     }
+    const ot = kioskCart.orderType;
+    const ups = kioskUpsellItems();
+    const lineExtras = (l) => {
+      const bits = [];
+      if (l.components && l.components.length) bits.push(`<div class="kx-pi-sub">${l.components.map((cp) => esc(cp.name)).join(' · ')}</div>`);
+      if (l.addons && l.addons.length) bits.push(`<div class="kx-pi-sub">${l.addons.map((a) => '+ ' + esc(a.name) + (a.qty > 1 ? ' ×' + a.qty : '')).join(', ')}</div>`);
+      if (l.mods && l.mods.length) bits.push(`<div class="kx-pi-sub">${l.mods.map((x) => esc(x)).join(', ')}</div>`);
+      if (l.note) bits.push(`<div class="kx-pi-note">📝 ${esc(l.note)}</div>`);
+      return bits.join('');
+    };
     return `<div class="kx-pay">
       ${kioskBar()}
-      <div class="kx-pay-inner">
-        <button class="kx-back" onclick="UI.kioskGo('menu')">← Back to menu</button>
-        <h2>Review &amp; pay</h2>
-        <div class="kx-pay-list">
-          ${t.lines.map((l) => `<div class="kx-pl"><span>${l.qty}× ${esc(l.name)}</span><b>${money(l.lineNet)}</b></div>`).join('')}
+      <div class="kx-pay-wrap">
+        ${kioskSteps(1)}
+        <div class="kx-pay-cols">
+          <section class="kx-pay-left">
+            <button class="kx-back" onclick="UI.kioskGo('menu')">← ${kt('back_menu')}</button>
+            <div class="kx-ot">
+              <div class="kx-ot-h">${kt('how_serve')}</div>
+              <div class="kx-ot-seg">
+                <button class="${ot === 'dine-in' ? 'on' : ''}" onclick="UI.kioskSetOrderType('dine-in')">🍽️ ${kt('dine_in')}</button>
+                <button class="${ot === 'take-away' ? 'on' : ''}" onclick="UI.kioskSetOrderType('take-away')">🥡 ${kt('take_away')}</button>
+              </div>
+            </div>
+            <h3 class="kx-pay-h">🧺 ${kt('your_order')}</h3>
+            <div class="kx-pay-items">
+              ${t.lines.map((l) => `<div class="kx-pi">
+                <div class="kx-pi-main">
+                  <div class="kx-pi-name">${esc(l.name)}</div>
+                  ${lineExtras(l)}
+                </div>
+                <div class="kx-pi-right">
+                  <div class="kx-step sm" onclick="event.stopPropagation()">
+                    <button aria-label="Less" onclick="UI.kioskQty('${l.uid}',-1)">−</button><b>${l.qty}</b>
+                    <button aria-label="More" onclick="UI.kioskQty('${l.uid}',1)">＋</button>
+                  </div>
+                  <div class="kx-pi-price">${money(l.lineNet)}</div>
+                  <button class="kx-pi-rm" onclick="UI.kioskQty('${l.uid}',-99)" title="Remove">🗑</button>
+                </div>
+              </div>`).join('')}
+            </div>
+            <button class="kx-addmore" onclick="UI.kioskGo('menu')">＋ ${kt('add_more')}</button>
+            ${ups.length ? `<div class="kx-upsell">
+              <div class="kx-upsell-h">✨ ${kt('add_drink')}</div>
+              <div class="kx-upsell-row">${ups.map((it) => `<button class="kx-up" onclick="UI.kioskUpsellAdd('${it.id}')">
+                <span class="kx-up-thumb"><img src="${esc(itemImage(it))}" alt="" loading="lazy" onerror="this.style.display='none'"><span class="kx-up-plus">＋</span></span>
+                <span class="kx-up-n">${esc(it.name)}</span>
+                <span class="kx-up-p">${money(it.price)}</span>
+              </button>`).join('')}</div>
+            </div>` : ''}
+          </section>
+          <aside class="kx-pay-right">
+            <div class="kx-sum-card">
+              <div class="kx-mini-member">
+                ${m ? `<div class="kx-mm-on"><span class="kx-mm-star">⭐</span><span class="kx-mm-tx"><b>${esc(m.name)}</b><em>+${earn} ${kt('points')} → ${m.points + earn}</em></span><button class="kx-mm-x" title="${kt('sign_out')}" onclick="UI.kioskClearMember()">✕</button></div>`
+                    : `<div class="kx-mm-h">⭐ ${kt('membership')}</div>
+                       <div class="kx-mm-scan"><input id="kx-code-inline" class="kx-mm-in" placeholder="${kt('scan_hint')}" autocomplete="off"><button onclick="UI.kioskLookup()">${kt('look_up')}</button></div>
+                       <div class="kx-mm-hint">📷 ${kt('add_member_earn')} ${earn} ${kt('points')}</div>`}
+              </div>
+              <div class="kx-sum">
+                <div class="kx-sum-r"><span>${kt('subtotal')}</span><span>${money(t.gross)}</span></div>
+                ${t.totalDiscount > 0 ? `<div class="kx-sum-r save"><span>🏷️ ${kt('promo')}</span><span>−${money(t.totalDiscount)}</span></div>` : ''}
+                <div class="kx-sum-r"><span>${esc(c.taxLabel)} ${(c.taxRate * 100).toFixed(0)}%${t.taxInclusive ? ` <em>(${kt('incl')})</em>` : ''}</span><span>${money(t.tax)}</span></div>
+                <div class="kx-sum-r grand"><span>${kt('total')}</span><b>${money(t.total)}</b></div>
+              </div>
+              <button class="kx-paybtn" onclick="UI.kioskCardPay()">💳 ${kt('pay_card')} · ${money(t.total)}</button>
+              <div class="kx-pay-note">${kt('pay_note')}</div>
+            </div>
+          </aside>
         </div>
-        ${t.totalDiscount > 0 ? `<div class="kx-pay-save">Promo savings −${money(t.totalDiscount)}</div>` : ''}
-        <div class="kx-pay-total"><span>Total ${t.taxInclusive ? `<em>incl. ${esc(S.getConfig().taxLabel)}</em>` : ''}</span><b>${money(t.total)}</b></div>
-        ${m ? `<div class="kx-pay-member">⭐ ${esc(m.name)} — earn <b>${earn} pts</b> (balance → ${m.points + earn})</div>`
-            : `<button class="kx-pay-member add" onclick="UI.kioskGo('member')">📷 Add membership to earn ${earn} points</button>`}
-        <button class="kx-paybtn" onclick="UI.kioskCardPay()">💳 Pay by card · ${money(t.total)}</button>
-        <div class="kx-pay-note">Paying cash? Please order at the counter instead. 🌸</div>
       </div>
     </div>`;
   }
@@ -3125,13 +3415,14 @@
       <img class="kx-bg" src="assets/images/login-bg.jpg?v=22" alt="" aria-hidden="true">
       <div class="kx-attract-scrim" aria-hidden="true"></div>
       <div class="kx-done-inner">
+        <div class="kx-prog-wrap dark">${kioskSteps(3)}</div>
         <div class="kx-check">✓</div>
-        <h2>Order placed!</h2>
-        <p class="kx-done-q">Your queue number</p>
+        <h2>${kt('order_placed')}</h2>
+        <p class="kx-done-q">${kt('queue_no')}</p>
         <div class="kx-ticket">${esc(o.code)}</div>
-        <p class="kx-done-sub">Please collect at the counter when your number is called.</p>
-        ${(o.memberId && o.pointsEarned) ? `<div class="kx-done-pts">⭐ +${o.pointsEarned} points earned</div>` : ''}
-        <button class="kx-newbtn" onclick="UI.kioskNewOrder()">New order</button>
+        <p class="kx-done-sub">${kt('collect_note')}</p>
+        ${(o.memberId && o.pointsEarned) ? `<div class="kx-done-pts">⭐ +${o.pointsEarned} ${kt('points')}</div>` : ''}
+        <button class="kx-newbtn" onclick="UI.kioskNewOrder()">${kt('new_order')}</button>
       </div>
     </div>`;
   }
@@ -3289,7 +3580,10 @@
     userSet, userAdd, userDel,
     // customer display + standing order tree (kiosk)
     openBackScreen, exitScreen, openKiosk, kioskGo, kioskBack, kioskNextAd, kioskNextHomeAd, loginNextVid, kioskToggleCart,
-    kioskAdd, kioskSetCat, kioskQty, kioskScan, kioskLookup, kioskClearMember, kioskCardPay, kioskNewOrder
+    kioskAdd, kioskSetCat, kioskQty, kioskScan, kioskLookup, kioskClearMember, kioskCardPay, kioskNewOrder,
+    kioskSetLang, kioskLangToggle, kioskFilterSet, kioskSetOrderType, kioskQuickAdd, kioskQuickDec,
+    kioskOpenItem, kioskSheetClose, kioskSheetQty, kioskSheetAddon, kioskSheetMod, kioskSheetNote,
+    kioskComboPick, kioskSheetSave, kioskUpsellAdd
   };
 
   document.addEventListener('DOMContentLoaded', init);
