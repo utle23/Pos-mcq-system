@@ -13,19 +13,19 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const money = (n) => S.money(n);
-  const ITEM_ASSET_VERSION = 11;
+  const ITEM_ASSET_VERSION = 12;
   const itemAsset = (id) => 'assets/images/items/' + id + '.jpg?v=' + ITEM_ASSET_VERSION;
   const itemImage = (item) => item.img || itemAsset(item.id);
 
   const ui = {
     view: 'register', currentUser: null, adminUnlocked: false,
-    category: S.getCategories()[0].id, drinkSub: 'smoothies', search: '',
+    category: S.getCategories()[0].id, drinkSub: 'juice', search: '',
     menuTab: 'items', reportFrom: '', reportTo: '', reportCat: '', historyDay: null, orderQuery: ''
   };
 
-  // Top-level category navigation; the Drinks group reveals 3 sub-categories.
-  const DRINKS_GROUP = { id: 'g:drinks', name: 'Drinks', icon: '🥤', accent: '#2e7d5b', subs: ['smoothies', 'coffee', 'lemonade'] };
-  const CAT_NAV = ['banh-mi', 'pho-bun', 'dry-noodles', 'rice', 'sizzling', 'juice', DRINKS_GROUP, 'combo', 'bakery'];
+  // Top-level category navigation; the Drinks group reveals its sub-categories.
+  const DRINKS_GROUP = { id: 'g:drinks', name: 'Drinks', icon: '🥤', accent: '#2e7d5b', subs: ['juice', 'smoothies', 'coffee', 'lemonade'] };
+  const CAT_NAV = ['banh-mi', 'pho-bun', 'dry-noodles', 'rice', 'sizzling', DRINKS_GROUP, 'combo', 'bakery'];
   const effectiveCat = () => (ui.category === 'g:drinks' ? ui.drinkSub : ui.category);
 
   /* ---- item promo preview (reuses the pricing engine) -------------------- */

@@ -8,8 +8,9 @@
 
   const KEY = 'mcq_pos_state_v1';
   const D = global.MCQ_DATA;
-  const ITEM_ASSET_VERSION = 11;
+  const ITEM_ASSET_VERSION = 12;
   const itemAsset = (id) => 'assets/images/items/' + id + '.jpg?v=' + ITEM_ASSET_VERSION;
+  const DRINK_CATS = ['juice', 'smoothies', 'coffee', 'lemonade'];
   const BANH_MI_IMAGE_FIXES = {
     'bm-fried-eggs': itemAsset('bm-fried-eggs'),
     'bm-tofu': itemAsset('bm-tofu'),
@@ -22,7 +23,6 @@
     'bk-banh-tieu-hollow': itemAsset('bk-banh-tieu-hollow'),
     'bk-banh-tieu-dau': itemAsset('bk-banh-tieu-dau'),
     'bk-banh-tieu-rubi': itemAsset('bk-banh-tieu-rubi'),
-    'bk-chao-quay': itemAsset('bk-chao-quay'),
     'bk-chao-quay-rubi': itemAsset('bk-chao-quay-rubi'),
     'bk-meat-spring-roll': itemAsset('bk-meat-spring-roll'),
     'bk-fried-pork-dump': itemAsset('bk-fried-pork-dump'),
@@ -31,7 +31,6 @@
   };
   const BAKERY_FRONT_ORDER = [
     'bk-banh-tieu-hollow',
-    'bk-chao-quay',
     'bk-meat-spring-roll',
     'bk-fried-pork-dump',
     'bk-fried-banana',
@@ -169,6 +168,10 @@
       });
       const bateso = state.menu.find((m) => m.id === 'bk-batiso');
       if (bateso && bateso.name === 'Batiso') bateso.name = 'Bateso';
+      reorderCategoryFirst('bakery', BAKERY_FRONT_ORDER);
+    }
+    if (savedVer < 12) {
+      state.menu = state.menu.filter((m) => m.id !== 'bk-chao-quay');
       reorderCategoryFirst('bakery', BAKERY_FRONT_ORDER);
     }
   }
@@ -400,10 +403,13 @@
   const getModifierGroups = () => state.modifierGroups;
   function groupsForItem(item) {
     if (!item) return [];
-    return state.modifierGroups.filter((g) =>
-      (g.appliesTo.all) ||
-      (g.appliesTo.categories || []).includes(item.cat) ||
-      (g.appliesTo.items || []).includes(item.id));
+    const drinkItem = DRINK_CATS.includes(item.cat);
+    return state.modifierGroups.filter((g) => {
+      const direct = (g.appliesTo.categories || []).includes(item.cat) ||
+        (g.appliesTo.items || []).includes(item.id);
+      if (drinkItem) return direct;
+      return g.appliesTo.all || direct;
+    });
   }
 
   /* ---- modifier management (admin) -------------------------------------- */

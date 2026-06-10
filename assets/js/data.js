@@ -119,7 +119,6 @@
 
     // 🥐 Bakery & Snacks
     { id: 'bk-banh-tieu-hollow',  cat: 'bakery', name: 'Banh Tieu (Hollow Sesame Donut)', price: 3 },
-    { id: 'bk-chao-quay',         cat: 'bakery', name: 'Chao Quay (Chinese Doughnut)',    price: 3 },
     { id: 'bk-meat-spring-roll',  cat: 'bakery', name: 'Meat Spring Roll',                price: 2.5 },
     { id: 'bk-fried-pork-dump',   cat: 'bakery', name: 'Fried Pork Dumpling',             price: 3 },
     { id: 'bk-fried-banana',      cat: 'bakery', name: 'Fried Banana',                    price: 3 },
@@ -184,7 +183,7 @@
       ]
     },
     {
-      id: 'universal-extras', name: 'Extras', appliesTo: { all: true },
+      id: 'universal-extras', name: 'Extras', appliesTo: { categories: ['banh-mi', 'pho-bun', 'dry-noodles', 'rice', 'sizzling', 'combo', 'bakery'] },
       options: [
         { name: 'Extra soup', price: 3 },
         { name: 'Extra rice noodle', price: 1 },
@@ -212,7 +211,7 @@
       ]
     },
     {
-      id: 'preferences', name: 'Preferences (no charge)', free: true, appliesTo: { all: true },
+      id: 'preferences', name: 'Preferences (no charge)', free: true, appliesTo: { categories: ['banh-mi', 'pho-bun', 'dry-noodles', 'rice', 'sizzling', 'combo', 'bakery'] },
       options: [
         { name: 'No coriander' }, { name: 'No onion' }, { name: 'No chilli' },
         { name: 'Extra chilli' }, { name: 'Spicy' }, { name: 'Less spicy' },
@@ -220,12 +219,18 @@
         { name: 'No ice' }, { name: 'Less ice' },
         { name: 'No vegetables' }, { name: 'Gluten free' }, { name: 'Add utensils' }
       ]
+    },
+    {
+      id: 'drink-prefs', name: 'Drink options (no charge)', free: true, appliesTo: { categories: ['juice', 'smoothies', 'coffee', 'lemonade'] },
+      options: [
+        { name: 'No ice' }
+      ]
     }
   ];
 
   // ---- Default store configuration -----------------------------------------
   const CONFIG = {
-    seedVersion: 11,           // bump to migrate persisted store details
+    seedVersion: 12,           // bump to migrate persisted store details
     storeName: 'MCQ Café',
     tagline: 'Vietnamese Street Food',
     address: 'Shop MM4/43 Yirrigan Dr, Mirrabooka WA 6061',
@@ -254,6 +259,6 @@
     MODIFIER_GROUPS,
     PROMOTIONS,
     CONFIG,
-    VERSION: 11
+    VERSION: 12
   };
 })(window);
