@@ -71,6 +71,7 @@
     orders: [],      // completed orders (history)
     credits: [],     // manager credits/refunds with no linked receipt
     tills: [],       // ring-off (Z) records
+    auditLog: [],    // manager-sensitive actions
     trainingMode: false
   };
 
@@ -114,6 +115,7 @@
         state.orders = saved.orders || [];
         state.credits = saved.credits || [];
         state.tills = saved.tills || [];
+        state.auditLog = Array.isArray(saved.auditLog) ? saved.auditLog : [];
         state.trainingMode = !!saved.trainingMode;
         state.cart = saved.cart && saved.cart.lines ? saved.cart : newCart();
       } catch (e) { /* corrupt -> defaults */ }
@@ -207,11 +209,25 @@
       orders: state.orders,
       credits: state.credits,
       tills: state.tills,
+      auditLog: state.auditLog,
       trainingMode: state.trainingMode
     }));
   }
 
   function commit() { persist(); emit(); }
+
+  function audit(action, detail = {}, level = 'info') {
+    state.auditLog = state.auditLog || [];
+    state.auditLog.unshift({
+      id: 'A' + uid(),
+      at: Date.now(),
+      by: state.config.cashier || 'System',
+      action,
+      level,
+      detail: clone(detail)
+    });
+    if (state.auditLog.length > 500) state.auditLog.length = 500;
+  }
 
   /* ---- lookups ----------------------------------------------------------- */
   const getConfig = () => state.config;
@@ -220,7 +236,13 @@
   const getHeld = () => state.held;
   const getOrders = () => state.orders;
   const isTrainingMode = () => !!state.trainingMode;
-  function setTrainingMode(on) { state.trainingMode = !!on; commit(); }
+  const getAuditLog = () => state.auditLog || [];
+  function setTrainingMode(on) {
+    const next = !!on;
+    if (state.trainingMode !== next) audit(next ? 'training.on' : 'training.off', {}, 'notice');
+    state.trainingMode = next;
+    commit();
+  }
   const findItem = (id) => state.menu.find((m) => m.id === id);
   const itemsByCategory = (catId) => state.menu.filter((m) => m.cat === catId);
 
@@ -495,6 +517,7 @@
   function setCartNote(n) { state.cart.note = n; commit(); }
   function setDiscount(mode, value) {
     state.cart.discount = { mode, value: Number(value) || 0 };
+    audit('discount.order', { mode, value: state.cart.discount.value }, 'warn');
     commit();
   }
   // Per-line admin discount. uidList = array of line uids to apply to.
@@ -503,11 +526,13 @@
     state.cart.lines.forEach((l) => {
       l.discount = set.has(l.uid) ? { mode, value: Number(value) || 0 } : { mode: 'none', value: 0 };
     });
+    audit('discount.items', { mode, value: Number(value) || 0, count: set.size }, 'warn');
     commit();
   }
   function clearAllDiscounts() {
     state.cart.discount = { mode: 'none', value: 0 };
     state.cart.lines.forEach((l) => { l.discount = { mode: 'none', value: 0 }; });
+    audit('discount.clear', {}, 'warn');
     commit();
   }
   function clearCart() { state.cart = newCart(); commit(); }
@@ -599,6 +624,7 @@
     };
     state.orders.unshift(order);
     state.cart = newCart();
+    if (training) audit('sale.training', { orderId: order.id, total: payable.total, items: totals.itemCount }, 'notice');
     commit();
     return order;
   }
@@ -652,7 +678,13 @@
   // Full cancellation — removes the sale from all takings. Use for mistakes.
   function voidOrder(id) {
     const o = findOrder(id);
-    if (o) { o.status = 'voided'; o.voidedAt = Date.now(); o.voidedBy = state.config.cashier; commit(); }
+    if (o) {
+      o.status = 'voided';
+      o.voidedAt = Date.now();
+      o.voidedBy = state.config.cashier;
+      audit('order.void', { orderId: o.id, code: o.code, total: o.totals.total }, 'warn');
+      commit();
+    }
   }
 
   // How many units of each line can still be returned.
@@ -706,6 +738,7 @@
 
     const fullyReturned = o.lines.every((l) => (l.refundedQty || 0) >= l.qty);
     o.status = (fullyReturned || remainingRefundable(o) <= 0.001) ? 'refunded' : 'partial-refund';
+    audit('order.refund', { orderId: o.id, code: o.code, amount: rec.amount, method: rec.method, reason: rec.reason }, 'warn');
     commit();
     return rec;
   }
@@ -715,17 +748,28 @@
    * ====================================================================== */
   function upsertMenuItem(item) {
     const idx = state.menu.findIndex((m) => m.id === item.id);
+    const before = idx >= 0 ? state.menu[idx] : null;
     if (idx >= 0) state.menu[idx] = Object.assign({}, state.menu[idx], item);
     else state.menu.push(Object.assign({ id: 'item-' + uid() }, item));
+    const after = idx >= 0 ? state.menu[idx] : state.menu[state.menu.length - 1];
+    audit(before ? 'menu.update' : 'menu.create', {
+      id: after.id, name: after.name, category: after.cat, price: after.price
+    }, 'notice');
     commit();
   }
   function deleteMenuItem(id) {
+    const item = findItem(id);
     state.menu = state.menu.filter((m) => m.id !== id);
+    audit('menu.delete', { id, name: item ? item.name : '' }, 'warn');
     commit();
   }
   function toggleAvailability(id) {
     const m = findItem(id);
-    if (m) { m.available = m.available === false ? true : false; commit(); }
+    if (m) {
+      m.available = m.available === false ? true : false;
+      audit(m.available === false ? 'menu.sold_out' : 'menu.available', { id: m.id, name: m.name }, m.available === false ? 'warn' : 'notice');
+      commit();
+    }
   }
 
   /* ====================================================================== *
@@ -741,12 +785,19 @@
   }
   function setActiveCashier(name) { state.config.cashier = name; commit(); }
   function addUser(u) {
-    state.config.users = getUsers().concat([Object.assign({ id: 'u-' + uid(), name: 'New staff', pin: '0000', role: 'user' }, u)]);
+    const rec = Object.assign({ id: 'u-' + uid(), name: 'New staff', pin: '0000', role: 'user' }, u);
+    state.config.users = getUsers().concat([rec]);
+    audit('staff.create', { id: rec.id, name: rec.name, role: rec.role }, 'notice');
     commit();
   }
   function updateUser(id, patch) {
     const u = getUsers().find((x) => x.id === id);
-    if (u) { Object.assign(u, patch); commit(); }
+    if (u) {
+      const changed = Object.keys(patch || {}).filter((k) => JSON.stringify(u[k]) !== JSON.stringify(patch[k]));
+      Object.assign(u, patch);
+      if (changed.length) audit('staff.update', { id: u.id, name: u.name, keys: changed }, 'notice');
+      commit();
+    }
   }
   function deleteUser(id) {
     const users = getUsers();
@@ -754,6 +805,7 @@
     const target = users.find((x) => x.id === id);
     if (target && target.role === 'admin' && users.filter((x) => x.role === 'admin').length <= 1) return false;
     state.config.users = users.filter((x) => x.id !== id);
+    audit('staff.delete', { id, name: target ? target.name : '' }, 'warn');
     commit();
     return true;
   }
@@ -772,33 +824,48 @@
     };
     if (rec.amount <= 0) return null;
     state.credits.unshift(rec);
+    audit('credit.issue', { id: rec.id, amount: rec.amount, method: rec.method, description: rec.description }, 'warn');
     commit();
     return rec;
   }
 
   /* ---- config ------------------------------------------------------------ */
   function updateConfig(patch) {
+    const changed = Object.keys(patch || {}).filter((k) => JSON.stringify(state.config[k]) !== JSON.stringify(patch[k]));
     state.config = Object.assign({}, state.config, patch);
+    if (changed.length) audit('settings.update', { keys: changed }, 'notice');
     commit();
   }
   function togglePromotion(id) {
     const p = state.promotions.find((x) => x.id === id);
-    if (p) { p.active = !p.active; commit(); }
+    if (p) {
+      p.active = !p.active;
+      audit(p.active ? 'promotion.enable' : 'promotion.disable', { id: p.id, name: p.name }, 'notice');
+      commit();
+    }
   }
   function addPromotion(promo) {
-    state.promotions.push(Object.assign({
+    const rec = Object.assign({
       id: 'promo-' + uid(), name: 'New promotion', type: 'category_percent',
       category: D.CATEGORIES[0].id, percent: 10, excludeItemIds: [], excludeCombos: true,
       startDate: '', endDate: '', active: true, note: ''
-    }, promo));
+    }, promo);
+    state.promotions.push(rec);
+    audit('promotion.create', { id: rec.id, name: rec.name, percent: rec.percent, category: rec.category }, 'notice');
     commit();
   }
   function updatePromotion(id, patch) {
     const p = state.promotions.find((x) => x.id === id);
-    if (p) { Object.assign(p, patch); commit(); }
+    if (p) {
+      Object.assign(p, patch);
+      audit('promotion.update', { id: p.id, name: p.name }, 'notice');
+      commit();
+    }
   }
   function deletePromotion(id) {
+    const p = state.promotions.find((x) => x.id === id);
     state.promotions = state.promotions.filter((p) => p.id !== id);
+    audit('promotion.delete', { id, name: p ? p.name : '' }, 'warn');
     commit();
   }
 
@@ -943,6 +1010,7 @@
     const rep = tillReport(dKey);
     const rec = { id: 'Z' + uid(), at: Date.now(), dayKey: rep.dayKey, by: state.config.cashier, report: rep };
     state.tills.unshift(rec);
+    audit('till.ring_off', { id: rec.id, dayKey: rec.dayKey, netSales: rep.netSales, drawerTotal: rep.drawerTotal }, 'warn');
     commit();
     return rec;
   }
@@ -959,6 +1027,7 @@
       orders: [],
       credits: [],
       tills: [],
+      auditLog: [{ id: 'A' + uid(), at: Date.now(), by: 'System', action: 'data.reset', level: 'warn', detail: {} }],
       trainingMode: false
     };
     commit();
@@ -968,7 +1037,7 @@
     return JSON.stringify({
       config: state.config, menu: state.menu, promotions: state.promotions,
       modifierGroups: state.modifierGroups, held: state.held, orders: state.orders,
-      credits: state.credits, tills: state.tills, trainingMode: state.trainingMode
+      credits: state.credits, tills: state.tills, auditLog: state.auditLog, trainingMode: state.trainingMode
     }, null, 2);
   }
   function importData(json) {
@@ -981,7 +1050,9 @@
     if (data.orders) state.orders = data.orders;
     if (data.credits) state.credits = data.credits;
     if (data.tills) state.tills = data.tills;
+    state.auditLog = Array.isArray(data.auditLog) ? data.auditLog : [];
     state.trainingMode = !!data.trainingMode;
+    audit('data.import', { orders: state.orders.length, menu: state.menu.length }, 'warn');
     commit();
   }
 
@@ -989,7 +1060,7 @@
   global.Store = {
     load, subscribe, commit,
     // getters
-    getConfig, getMenu, getCart, getHeld, getOrders, isTrainingMode, setTrainingMode, findItem, itemsByCategory,
+    getConfig, getMenu, getCart, getHeld, getOrders, getAuditLog, isTrainingMode, setTrainingMode, findItem, itemsByCategory,
     getCategories: () => D.CATEGORIES, getPromotions: () => state.promotions,
     money, round2,
     // pricing

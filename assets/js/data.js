@@ -8,18 +8,21 @@
   'use strict';
 
   // ---- Categories -----------------------------------------------------------
+  // Each category owns a vivid, distinct signature colour. It flows through the
+  // whole UI: category chips, item-card borders/photo tints/prices/hover glow,
+  // section headers and dashboard bars — so every menu button reads at a glance.
   const CATEGORIES = [
-    { id: 'banh-mi',     name: 'Bánh Mì',            icon: '🥖', accent: '#c9772f' },
-    { id: 'pho-bun',     name: 'Phở & Bún',          icon: '🍜', accent: '#9b2226' },
-    { id: 'dry-noodles', name: 'Dry Noodles',        icon: '🍝', accent: '#b5651d' },
-    { id: 'rice',        name: 'Rice Dishes',        icon: '🍚', accent: '#7a8450' },
-    { id: 'sizzling',    name: 'Sizzling Hot Plate', icon: '🍳', accent: '#a4561d' },
-    { id: 'juice',       name: 'Mixed Juice',        icon: '🥤', accent: '#2e7d5b' },
-    { id: 'smoothies',   name: 'Smoothies',          icon: '🧋', accent: '#b5446e' },
-    { id: 'coffee',      name: 'Vietnamese Coffee',  icon: '☕', accent: '#5c4033' },
-    { id: 'lemonade',    name: 'Lemonade',           icon: '🍋', accent: '#caa307' },
-    { id: 'combo',       name: 'Combo Deals',        icon: '🎁', accent: '#7251b5' },
-    { id: 'bakery',      name: 'Bakery & Snacks',    icon: '🥐', accent: '#bc8a5f' }
+    { id: 'banh-mi',     name: 'Bánh Mì',            icon: '🥖', accent: '#ef7b2b' }, // toasted orange
+    { id: 'pho-bun',     name: 'Phở & Bún',          icon: '🍜', accent: '#d4283a' }, // pho red
+    { id: 'dry-noodles', name: 'Dry Noodles',        icon: '🍝', accent: '#e09a16' }, // golden amber
+    { id: 'rice',        name: 'Rice Dishes',        icon: '🍚', accent: '#6fae3a' }, // rice-paddy green
+    { id: 'sizzling',    name: 'Sizzling Hot Plate', icon: '🍳', accent: '#ec5a1b' }, // sizzling ember
+    { id: 'juice',       name: 'Mixed Juice',        icon: '🥤', accent: '#10a572' }, // fresh green
+    { id: 'smoothies',   name: 'Smoothies',          icon: '🧋', accent: '#e23f86' }, // berry pink
+    { id: 'coffee',      name: 'Vietnamese Coffee',  icon: '☕', accent: '#8a5a3b' }, // espresso
+    { id: 'lemonade',    name: 'Lemonade',           icon: '🍋', accent: '#e6b505' }, // citrus yellow
+    { id: 'combo',       name: 'Combo Deals',        icon: '🎁', accent: '#8453e0' }, // festive purple
+    { id: 'bakery',      name: 'Bakery & Snacks',    icon: '🥐', accent: '#d98c3c' }  // honey gold
   ];
 
   // ---- Menu items -----------------------------------------------------------
@@ -242,7 +245,6 @@
     taxLabel: 'GST',
     taxInclusive: true,       // menu prices already include tax
     cashRounding: 0,          // round all-cash payments to nearest (0 = off, 0.05 = AU 5c)
-    touchMode: false,         // larger counter/tablet controls
     cashier: 'Cashier 1',     // active cashier (set on login)
     receiptFooter: 'Thank you for dining with MCQ Café! Xin cảm ơn quý khách 🌸',
     orderSeq: 1001,           // internal unique order id (never resets)

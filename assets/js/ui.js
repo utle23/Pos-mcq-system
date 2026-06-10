@@ -24,9 +24,8 @@
   };
 
   // Top-level category navigation; the Drinks group reveals its sub-categories.
-  const DRINKS_GROUP = { id: 'g:drinks', name: 'Drinks', icon: '🥤', accent: '#2e7d5b', subs: ['juice', 'smoothies', 'coffee', 'lemonade'] };
+  const DRINKS_GROUP = { id: 'g:drinks', name: 'Drinks', icon: '🥤', accent: '#0fa3a0', subs: ['juice', 'smoothies', 'coffee', 'lemonade'] };
   const CAT_NAV = ['banh-mi', 'pho-bun', 'dry-noodles', 'rice', 'sizzling', DRINKS_GROUP, 'combo', 'bakery'];
-  const FAVORITE_IDS = ['bm-trad-pork', 'bm-roast-pork', 'ph-raw-beef', 'ph-bun-bo-hue', 'rc-pork-chop', 'cf-milk', 'jc-sugarcane', 'combo-drink'];
   const effectiveCat = () => (ui.category === 'g:drinks' ? ui.drinkSub : ui.category);
 
   /* ---- item promo preview (reuses the pricing engine) -------------------- */
@@ -90,7 +89,7 @@
   }
   function applyModeClasses() {
     document.body.classList.toggle('training-mode', S.isTrainingMode());
-    document.body.classList.toggle('touch-mode', !!S.getConfig().touchMode);
+    document.body.classList.remove('touch-mode');
   }
   function refreshCart() {
     const el = $('#pos-cart'); if (!el) return;
@@ -103,8 +102,8 @@
 
   // Views that need a Manager to ENTER. Transaction History (orders) is open to
   // everyone — only the Refund action inside it is gated.
-  const ADMIN_VIEWS = ['admin', 'orders', 'dashboard', 'menu', 'settings'];
-  const GATED_VIEWS = ['admin', 'dashboard', 'menu', 'settings'];
+  const ADMIN_VIEWS = ['admin', 'orders', 'dashboard', 'menu', 'settings', 'audit'];
+  const GATED_VIEWS = ['admin', 'dashboard', 'menu', 'settings', 'audit'];
   const isAdminUser = () => !!(ui.currentUser && ui.currentUser.role === 'admin');
   function go(view) { ui.view = view; renderTopbar(); render(); }
 
@@ -138,7 +137,6 @@
     const right = inAdmin
       ? `<button class="tb-action" onclick="UI.exitAdmin()">🖥️ Register</button>`
       : `<button class="tb-action mode ${S.isTrainingMode() ? 'on' : ''}" title="Training sales do not count in reports" onclick="UI.toggleTrainingMode()">🎓 <span>${S.isTrainingMode() ? 'Training ON' : 'Training'}</span></button>
-         <button class="tb-action touch ${c.touchMode ? 'on' : ''}" title="Bigger tablet/counter controls" onclick="UI.toggleTouchMode()">👆 <span>${c.touchMode ? 'Touch ON' : 'Touch'}</span></button>
          <button class="tb-action" title="Transaction history" onclick="UI.go('orders')">📑 <span>History</span></button>
          <button class="tb-action" title="Reprint" onclick="UI.reprintLast()">🖨 <span>Reprint</span></button>
          <button class="tb-action key" onclick="UI.openAdmin()">🔑 <span>Admin</span></button>`;
@@ -168,16 +166,9 @@
     render();
     toast(S.isTrainingMode() ? 'Training mode on — sales are not counted' : 'Training mode off');
   }
-  function toggleTouchMode() {
-    const next = !S.getConfig().touchMode;
-    S.updateConfig({ touchMode: next });
-    renderTopbar();
-    render();
-    toast(next ? 'Touch mode on' : 'Touch mode off');
-  }
-
   function render() {
     const v = $('#view'); if (!v) return;
+    document.body.classList.toggle('login-view', !ui.currentUser);
     if (!ui.currentUser) { v.innerHTML = renderLogin(); return; }
     if (GATED_VIEWS.includes(ui.view) && !(ui.adminUnlocked || isAdminUser())) { ui.view = 'register'; }
     if (ui.view === 'register') v.innerHTML = renderPOS();
@@ -186,6 +177,7 @@
     else if (ui.view === 'dashboard') v.innerHTML = renderDashboard();
     else if (ui.view === 'menu') v.innerHTML = renderMenuManager();
     else if (ui.view === 'settings') v.innerHTML = renderSettings();
+    else if (ui.view === 'audit') v.innerHTML = renderAuditLog();
     if (ui.view === 'register' && ui.search) { const s = $('#search'); if (s) s.value = ui.search; }
     if (ui.view === 'orders' && ui.orderQuery) {
       const s = $('#order-search'); if (s) { s.focus(); const n = s.value.length; s.setSelectionRange(n, n); }
@@ -199,9 +191,12 @@
     const c = S.getConfig();
     const users = S.getUsers();
     return `<div class="login">
+      <img class="login-bg" src="assets/images/login-bg.jpg?v=22" alt="" aria-hidden="true">
+      <div class="login-scrim" aria-hidden="true"></div>
       <div class="login-card">
         <div class="login-brand">
           ${c.logo ? `<img src="${c.logo}" alt="MCQ">` : '<div class="brand-mark">MCQ</div>'}
+          <span class="login-eyebrow">Point of Sale</span>
           <h2>${esc(c.storeName)}</h2>
           <p>${esc(c.tagline)} · Select your account</p>
         </div>
@@ -246,6 +241,7 @@
       { v: 'orders', icon: '📑', label: 'Transaction History', desc: 'Look up, reprint, refund' },
       { v: 'dashboard', icon: '📊', label: 'Report', desc: 'Sales, till reading & ring off' },
       { v: 'menu', icon: '🍽️', label: 'Menu', desc: 'Items, add-ons, promotions' },
+      { v: 'audit', icon: '🧾', label: 'Audit Log', desc: 'Refunds, discounts, sold out' },
       { v: 'settings', icon: '⚙️', label: 'Settings', desc: 'Store, staff, tax, data' }
     ];
     return `<div class="page admin-hub">
@@ -271,6 +267,90 @@
     return toAdmin
       ? `<button class="ghost-btn" onclick="UI.go('admin')">← Admin</button>`
       : `<button class="ghost-btn" onclick="UI.exitAdmin()">🖥️ Register</button>`;
+  }
+
+  function auditLabel(action) {
+    const labels = {
+      'training.on': 'Training enabled',
+      'training.off': 'Training disabled',
+      'sale.training': 'Training sale',
+      'discount.order': 'Order discount',
+      'discount.items': 'Item discount',
+      'discount.clear': 'Discounts cleared',
+      'order.void': 'Order voided',
+      'order.refund': 'Refund processed',
+      'credit.issue': 'Credit issued',
+      'menu.create': 'Menu item created',
+      'menu.update': 'Menu item updated',
+      'menu.delete': 'Menu item deleted',
+      'menu.sold_out': 'Marked sold out',
+      'menu.available': 'Marked available',
+      'settings.update': 'Settings updated',
+      'promotion.create': 'Promotion created',
+      'promotion.update': 'Promotion updated',
+      'promotion.delete': 'Promotion deleted',
+      'promotion.enable': 'Promotion enabled',
+      'promotion.disable': 'Promotion disabled',
+      'staff.create': 'Staff created',
+      'staff.update': 'Staff updated',
+      'staff.delete': 'Staff deleted',
+      'till.ring_off': 'Ring off',
+      'data.import': 'Data imported',
+      'data.reset': 'Data reset'
+    };
+    return labels[action] || action;
+  }
+  function auditDetail(detail) {
+    if (!detail || !Object.keys(detail).length) return '—';
+    if (detail.name && detail.amount) return `${detail.name} · ${money(detail.amount)}`;
+    if (detail.code && detail.amount) return `Order ${detail.code} · ${money(detail.amount)}`;
+    if (detail.code && detail.total) return `Order ${detail.code} · ${money(detail.total)}`;
+    if (detail.keys) return detail.keys.join(', ');
+    if (detail.name) return detail.name;
+    if (detail.amount) return money(detail.amount);
+    return Object.entries(detail).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' · ');
+  }
+  function renderAuditLog() {
+    const rows = S.getAuditLog().slice(0, 300);
+    const body = rows.length ? rows.map((a) => {
+      const d = new Date(a.at);
+      return `<tr>
+        <td><b>${d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}</b><span class="row-sub">${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span></td>
+        <td>${esc(a.by || 'System')}</td>
+        <td><span class="audit-action">${esc(auditLabel(a.action))}</span><span class="row-sub">${esc(a.action)}</span></td>
+        <td class="audit-detail">${esc(auditDetail(a.detail))}</td>
+        <td><span class="audit-level ${esc(a.level || 'info')}">${esc(a.level || 'info')}</span></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" class="empty-cell">No audit activity yet.</td></tr>`;
+    return `<div class="page">
+      <div class="page-head">
+        <div class="page-title">${adminBack()}<h2>Audit Log</h2></div>
+        <div class="page-tools"><button class="ghost-btn" onclick="UI.exportAuditLog()">⬇ Export CSV</button></div>
+      </div>
+      <div class="orders-summary">
+        <div class="pill">Logged actions: <b>${S.getAuditLog().length}</b></div>
+        <div class="pill warn">Manager-sensitive changes only</div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table audit-table">
+          <thead><tr><th>Time</th><th>Staff</th><th>Action</th><th>Detail</th><th>Level</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+  function csvCell(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+  function exportAuditLog() {
+    const rows = [['Time', 'Staff', 'Action', 'Level', 'Detail']].concat(S.getAuditLog().map((a) => [
+      new Date(a.at).toLocaleString(), a.by || 'System', auditLabel(a.action), a.level || 'info', auditDetail(a.detail)
+    ]));
+    const csv = rows.map((r) => r.map(csvCell).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'mcq-audit-' + S.dayKey(Date.now()) + '.csv';
+    a.click();
+    toast('Audit log exported');
   }
 
   /* ====================================================================== *
@@ -329,10 +409,8 @@
       <div class="pos">
         <div class="pos-menu">
           ${renderTrainingBanner()}
-          ${renderQuickPicks()}
           ${renderPromoBanner()}
           ${renderCatBar()}
-          ${renderSearchBar()}
           <div id="sec-head">${renderSectionHead()}</div>
           <div id="menu-grid" class="menu-grid">${renderGrid()}</div>
         </div>
@@ -345,50 +423,6 @@
     return `<div class="training-banner">
       <strong>Training mode is ON</strong>
       <span>Practice sales print as training receipts and are excluded from revenue, till, top sellers and staff reports.</span>
-    </div>`;
-  }
-
-  function topRowToItem(row) {
-    if (row.itemId) {
-      const byId = S.findItem(row.itemId);
-      if (byId) return byId;
-    }
-    return S.getMenu().find((m) => S.displayName(m) === row.name || m.name === row.name) || null;
-  }
-
-  function quickPickItems() {
-    const today = S.dayKey(Date.now());
-    const rows = S.report(shiftDay(-6), today).itemRows;
-    const seen = new Set();
-    const picks = [];
-    const add = (item, sold) => {
-      if (!item || seen.has(item.id)) return;
-      seen.add(item.id);
-      picks.push({ item, sold: sold || 0 });
-    };
-    rows.forEach((row) => add(topRowToItem(row), row.qty));
-    FAVORITE_IDS.forEach((id) => add(S.findItem(id), 0));
-    return picks.slice(0, 8);
-  }
-
-  function renderQuickPicks() {
-    const picks = quickPickItems();
-    if (!picks.length) return '';
-    return `<div class="quick-picks">
-      <div class="qp-head">
-        <strong>Favorites / Top sellers</strong>
-        <span>Last 7 days + house picks</span>
-      </div>
-      <div class="qp-list">
-        ${picks.map(({ item, sold }) => {
-          const off = item.available === false;
-          return `<button class="qp-tile ${off ? 'off' : ''}" ${off ? 'disabled' : ''} onclick="UI.addItem('${item.id}')">
-            <span>${esc(item.name)}</span>
-            <b>${money(item.price)}</b>
-            <small>${sold ? sold + ' sold' : 'favorite'}</small>
-          </button>`;
-        }).join('')}
-      </div>
     </div>`;
   }
 
@@ -425,18 +459,9 @@
     const catPromos = activePromos().filter((p) => p.type === 'category_percent' && p.category === eid);
     const promo = catPromos.length
       ? `<span class="sec-promo">🏷️ ${esc(catPromos[0].name)} · ${esc(promoValidity(catPromos[0]))}</span>` : '';
-    return `<div class="sec-head-row">
-      <div class="sec-title"><span class="sec-ico" style="color:${c.accent}">${c.icon}</span>${esc(c.name)}<span class="sec-count">${count}</span></div>
+    return `<div class="sec-head-row" style="--accent:${c.accent}">
+      <div class="sec-title"><span class="sec-ico">${c.icon}</span>${esc(c.name)}<span class="sec-count">${count}</span></div>
       ${promo}
-    </div>`;
-  }
-
-  function renderSearchBar() {
-    return `<div class="search-bar">
-      <span class="search-ico">🔍</span>
-      <input id="search" type="text" placeholder="Search the whole menu…"
-        value="${esc(ui.search)}" oninput="UI.onSearch(this.value)" autocomplete="off">
-      <button id="search-clear" class="search-clear" style="display:${ui.search ? '' : 'none'}" onclick="UI.clearSearch()">✕</button>
     </div>`;
   }
 
@@ -461,7 +486,7 @@
       return `
         <article class="m-card ${disabled ? 'disabled' : ''} ${item.isCombo ? 'combo' : ''}"
           style="--accent:${cat.accent || '#c79a3f'}"
-          ${disabled ? 'aria-disabled="true"' : `role="button" tabindex="0" onclick="UI.addItem('${item.id}')" onkeydown="UI.itemCardKey(event,'${item.id}')"`}>
+          ${disabled ? 'aria-disabled="true"' : `role="button" tabindex="0" onclick="UI.addItem('${item.id}', event)" onkeydown="UI.itemCardKey(event,'${item.id}')"`}>
           <div class="m-thumb">
             <span class="m-thumb-ico">${cat.icon || '🍽️'}</span>
             <img src="${esc(img)}" alt="${esc(item.name)}" width="480" height="360" loading="lazy" decoding="async" onerror="this.remove();this.parentNode.classList.add('noimg')">
@@ -469,8 +494,12 @@
             ${promo ? `<span class="m-badge">−${promo.perUnit ? Math.round(promo.perUnit / item.price * 100) : 15}%</span>` : ''}
             ${item.takeawayOnly ? `<span class="m-tag takeaway">Take-away</span>` : ''}
             ${soldOut ? `<span class="m-tag sold">Sold out</span>` : ''}
-            <button class="m-sold-toggle ${soldOut ? 'restore' : ''}" title="${soldOut ? 'Mark available' : 'Mark sold out'}"
-              onclick="UI.quickSoldOut(event,'${item.id}')">${soldOut ? 'Back' : 'Sold out'}</button>
+            <div class="sold-slider ${soldOut ? 'restore' : ''}" role="button"
+              aria-label="${soldOut ? 'Slide right to restore item' : 'Slide right to mark sold out'}"
+              title="${soldOut ? 'Slide right to restore' : 'Slide right to mark sold out'}"
+              onpointerdown="UI.soldSwipeStart(event,'${item.id}')">
+              <span class="sold-slider-knob">${soldOut ? '↺' : '»'}</span>
+            </div>
           </div>
           <div class="m-body">
             <div class="m-name">${esc(item.name)}</div>
@@ -554,7 +583,7 @@
       <div class="cart-list">${lines}</div>
 
       <div class="cart-totals">
-        <div class="tot-row"><span>Subtotal (${t.itemCount} item${t.itemCount !== 1 ? 's' : ''})</span><span>${money(t.gross)}</span></div>
+        <div class="tot-row"><span>Subtotal (<span id="cart-count" class="cart-count">${t.itemCount}</span> item${t.itemCount !== 1 ? 's' : ''})</span><span>${money(t.gross)}</span></div>
         ${promoRow}${discountRow}${taxRow}
         ${t.roundingAdj ? `<div class="tot-row muted"><span>Rounding</span><span>${money(t.roundingAdj)}</span></div>` : ''}
         <div class="tot-row grand"><span>Total</span><span>${money(t.total)}</span></div>
@@ -587,19 +616,82 @@
     const s = $('#search'); if (s) { s.value = ''; s.focus(); }
     onSearch('');
   }
-  function addItem(id) {
+  function addItem(id, event) {
     const item = S.findItem(id);
     if (!item) return;
     if (item.isCombo) return openCombo(item);
+    animateTap(event);
     S.addItem(id);
+    flashCart();
     toast(item.name + ' added');
   }
-  function quickSoldOut(event, id) {
-    if (event) event.stopPropagation();
+  function animateTap(event) {
+    const card = event && event.currentTarget && event.currentTarget.classList.contains('m-card') ? event.currentTarget : null;
+    if (!card) return;
+    card.classList.remove('tap-pop');
+    void card.offsetWidth;
+    card.classList.add('tap-pop');
+    setTimeout(() => card.classList.remove('tap-pop'), 260);
+  }
+  function flashCart() {
+    requestAnimationFrame(() => {
+      const cart = $('#pos-cart');
+      if (cart) {
+        cart.classList.remove('cart-flash');
+        void cart.offsetWidth;
+        cart.classList.add('cart-flash');
+        setTimeout(() => cart.classList.remove('cart-flash'), 520);
+      }
+      const count = $('#cart-count');
+      if (count) {
+        count.classList.remove('count-pulse');
+        void count.offsetWidth;
+        count.classList.add('count-pulse');
+        setTimeout(() => count.classList.remove('count-pulse'), 520);
+      }
+    });
+  }
+  let soldSwipe = null;
+  function soldSwipeStart(event, id) {
+    event.preventDefault();
+    event.stopPropagation();
     const item = S.findItem(id);
     if (!item) return;
+    const el = event.currentTarget;
+    const knob = el.querySelector('.sold-slider-knob');
+    const thumb = el.parentNode;
+    const max = Math.max(88, (thumb ? thumb.clientWidth : 220) - 64);
+    soldSwipe = { id, el, knob, start: event.clientX, max, dx: 0, armed: false };
+    el.classList.add('dragging');
+    if (el.setPointerCapture) el.setPointerCapture(event.pointerId);
+    document.addEventListener('pointermove', soldSwipeMove);
+    document.addEventListener('pointerup', soldSwipeEnd, { once: true });
+    document.addEventListener('pointercancel', soldSwipeEnd, { once: true });
+  }
+  function soldSwipeMove(event) {
+    if (!soldSwipe) return;
+    const dx = Math.max(0, Math.min(soldSwipe.max, event.clientX - soldSwipe.start));
+    soldSwipe.dx = dx;
+    soldSwipe.armed = dx >= soldSwipe.max * 0.7;
+    soldSwipe.el.style.setProperty('--sold-dx', dx.toFixed(0) + 'px');
+    soldSwipe.el.classList.toggle('armed', soldSwipe.armed);
+    if (soldSwipe.knob) soldSwipe.knob.style.transform = `translateX(${dx}px)`;
+  }
+  function soldSwipeEnd() {
+    if (!soldSwipe) return;
+    const s = soldSwipe;
+    document.removeEventListener('pointermove', soldSwipeMove);
+    document.removeEventListener('pointerup', soldSwipeEnd);
+    document.removeEventListener('pointercancel', soldSwipeEnd);
+    s.el.classList.remove('dragging', 'armed');
+    s.el.style.removeProperty('--sold-dx');
+    if (s.knob) s.knob.style.transform = '';
+    soldSwipe = null;
+    if (!s.armed) return;
+    const item = S.findItem(s.id);
+    if (!item) return;
     requireAdmin(() => {
-      S.toggleAvailability(id);
+      S.toggleAvailability(s.id);
       refreshGrid();
       toast(item.available === false ? item.name + ' marked sold out' : item.name + ' available');
     }, 'Manager PIN to change sold-out status');
@@ -607,7 +699,7 @@
   function itemCardKey(event, id) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    addItem(id);
+    addItem(id, event);
   }
   const inc = (uid, d) => S.incQty(uid, d);
   const setQty = (uid, n) => S.setQty(uid, n);
@@ -678,7 +770,7 @@
   function modalShell(title, body, opts = {}) {
     return `
       <div class="overlay" onclick="UI.closeModal()">
-        <div class="modal ${opts.size || ''}" onclick="event.stopPropagation()">
+        <div class="modal ${opts.size || ''} ${opts.paper ? 'paper-modal' : ''}" onclick="event.stopPropagation()">
           <div class="modal-head">
             <h3>${title}</h3>
             <button class="x" onclick="UI.closeModal()">✕</button>
@@ -898,6 +990,7 @@
   function comboConfirm() {
     const { item, picks } = comboState;
     S.addItem(item.id, { components: picks.map((p) => ({ name: p.name, itemId: p.itemId, slot: p.slot })) });
+    flashCart();
     closeModal();
     toast('Combo added');
   }
@@ -1259,6 +1352,7 @@
     openModal(modalShell(order.training ? '🎓 Training receipt' : (fresh ? '✓ Sale complete' : 'Receipt #' + order.id), `
       <div class="receipt-frame">${receiptHTML(order)}</div>`, {
       size: 'sm',
+      paper: true,
       foot: `<button class="ghost-btn" onclick="UI.closeModal()">${fresh ? 'New order' : 'Close'}</button>
         ${refundBtn}
         <button class="solid-btn" onclick="UI.printReceipt(${order.id})">🖨 Print</button>`
@@ -1428,6 +1522,7 @@
     const showVoucher = () => {
       openModal(modalShell('💸 Credit issued', `<div class="receipt-frame">${creditReceiptHTML(rec)}</div>`, {
         size: 'sm',
+        paper: true,
         foot: `<button class="ghost-btn" onclick="UI.closeModal()">Done</button>
           <button class="solid-btn" onclick="UI.printCredit('${rec.id}')">🖨 Print voucher</button>`
       }));
@@ -1558,6 +1653,7 @@
       openModal(modalShell('↩ Refund processed', `
         <div class="receipt-frame">${refundReceiptHTML(S.findOrder(o.id), rec)}</div>`, {
         size: 'sm',
+        paper: true,
         foot: `<button class="ghost-btn" onclick="UI.closeModal()">Done</button>
           <button class="solid-btn" onclick="UI.printRefundVoucher(${o.id},'${rec.id}')">🖨 Print voucher</button>`
       }));
@@ -1639,7 +1735,8 @@
         const bg = 0.12 + pct * 0.54;
         const border = 0.18 + pct * 0.38;
         const label = String(hr).padStart(2, '0') + ':00';
-        return `<div class="heat-cell" style="--heat-bg:${bg.toFixed(2)};--heat-border:${border.toFixed(2)}" title="${label} · ${money(val)} · ${r.byHourOrders[hr] || 0} orders">
+        const tip = `${label} · ${money(val)} · ${r.byHourOrders[hr] || 0} orders`;
+        return `<div class="heat-cell" style="--heat-bg:${bg.toFixed(2)};--heat-border:${border.toFixed(2)}" data-tip="${esc(tip)}">
           <span>${label}</span><b>${money(val)}</b><em>${r.byHourOrders[hr] || 0} orders</em>
         </div>`;
       }).join('')}
@@ -1769,6 +1866,15 @@
     const catFilter = ui.reportCat || '';
     const catName = (id) => { const x = cats.find((k) => k.id === id); return x ? x.name : id; };
     const items = (catFilter ? r.itemRows.filter((it) => it.cat === catFilter) : r.itemRows);
+    const categoryRows = cats.filter((cc) => r.byCategory[cc.id])
+      .sort((a, b) => (r.byCategory[b.id] || 0) - (r.byCategory[a.id] || 0));
+    const maxCategory = Math.max(1, ...categoryRows.map((cc) => r.byCategory[cc.id] || 0));
+    const repKpis = [
+      ['Net sales', money(r.total), `${r.orders} orders`],
+      ['Gross', money(r.grossSales), 'before refunds'],
+      ['Refunds', '−' + money(r.refunds), `${r.refundCount} refund${r.refundCount !== 1 ? 's' : ''}`],
+      ['Average order', money(r.avgOrder), `${r.items} items sold`]
+    ];
     return `<div class="report-doc">
       <div class="rep-head">
         ${c.logo ? `<img class="rep-logo" src="${c.logo}">` : ''}
@@ -1778,6 +1884,15 @@
           <div class="rep-sub">${esc(c.address)}</div>
           <div class="rep-sub">Generated ${new Date().toLocaleString()}</div>
         </div>
+      </div>
+      <div class="rep-kpis">
+        ${repKpis.map(([label, value, sub]) => `<div class="rep-kpi"><span>${esc(label)}</span><b>${esc(value)}</b><em>${esc(sub)}</em></div>`).join('')}
+      </div>
+      <div class="rep-cat-strip">
+        ${categoryRows.slice(0, 6).map((cc) => `<div class="rep-cat" style="--accent:${cc.accent}">
+          <span>${esc(cc.name)}</span><b>${money(r.byCategory[cc.id])}</b>
+          <i style="width:${(r.byCategory[cc.id] / maxCategory * 100).toFixed(1)}%"></i>
+        </div>`).join('') || '<div class="rep-empty">No category sales.</div>'}
       </div>
       <table class="rep-table">
         <tr><th>Metric</th><th class="num">Value</th></tr>
@@ -1793,7 +1908,7 @@
       </table>
       <h4>Sales by category</h4>
       <table class="rep-table"><tr><th>Category</th><th class="num">Revenue</th></tr>
-        ${cats.filter((cc) => r.byCategory[cc.id]).map((cc) => `<tr><td>${esc(cc.name)}</td><td class="num">${money(r.byCategory[cc.id])}</td></tr>`).join('') || '<tr><td colspan="2">—</td></tr>'}
+        ${categoryRows.map((cc) => `<tr><td>${esc(cc.name)}</td><td class="num">${money(r.byCategory[cc.id])}</td></tr>`).join('') || '<tr><td colspan="2">—</td></tr>'}
       </table>
       <h4>Payment methods</h4>
       <table class="rep-table"><tr><th>Method</th><th class="num">Net</th></tr>
@@ -1874,6 +1989,7 @@
       openModal(modalShell(isZ ? '🔔 Ring Off (Z report)' : '🧾 Till Reading (X report)', `
         <div class="receipt-frame">${tillReceiptHTML(rep, isZ)}</div>`, {
         size: 'sm',
+        paper: true,
         foot: `<button class="ghost-btn" onclick="UI.closeModal()">Close</button>
           <button class="solid-btn" onclick="UI.printTill('${day}','${isZ ? 'z' : 'x'}')">🖨 Print</button>`
       }));
@@ -2422,6 +2538,106 @@
     confirmModal('Reset everything?', 'This wipes all orders, settings and menu edits and restores the default MCQ menu. This cannot be undone.', () => { S.resetAll(); ui.currentUser = null; ui.adminUnlocked = false; ui.view = 'register'; });
   }
 
+  /* ====================================================================== *
+   * ON-SCREEN KEYBOARD  (touch devices — notes, customer, table, pager…)
+   * The native keyboard still works; this guarantees text entry on a
+   * keyboard-less touchscreen / kiosk. Auto-opens on a COARSE pointer only,
+   * never on a mouse, so desktops keep using their physical keyboard.
+   * ====================================================================== */
+  const KBD_TOUCH = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in global);
+  const KBD_ABC = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm']
+  ];
+  const KBD_SYM = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['@', '#', '$', '&', '*', '(', ')', '_', '+', '='],
+    ['-', '/', ':', ';', '\'', '"', '?', '!'],
+    ['.', ',', '%', '~', '°', '·']
+  ];
+  let kbd = { field: null, shift: false, sym: false };
+
+  function kbdManaged(el) {
+    if (!el || !el.tagName || (el.hasAttribute && el.hasAttribute('data-nokbd'))) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.tagName !== 'INPUT') return false;
+    const t = (el.getAttribute('type') || 'text').toLowerCase();
+    return t === 'text' || t === 'search' || t === '';
+  }
+  function kbdEl() {
+    let el = document.getElementById('kbd');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'kbd';
+      el.setAttribute('role', 'group');
+      el.setAttribute('aria-label', 'On-screen keyboard');
+      el.addEventListener('pointerdown', kbdPress);
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function kbdOpenFor(field) {
+    kbd.field = field; kbd.sym = false; kbd.shift = false;
+    kbdRender();
+    document.body.classList.add('kbd-open');
+    setTimeout(() => { try { field.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }, 70);
+  }
+  function kbdClose() { kbd.field = null; document.body.classList.remove('kbd-open'); }
+  function kbdRender() {
+    const el = kbdEl();
+    const rows = kbd.sym ? KBD_SYM : KBD_ABC;
+    const key = (label, act, k, cls) =>
+      `<button type="button" class="kbd-k ${cls || ''}" data-act="${act}"${k != null ? ` data-k="${esc(k)}"` : ''}>${esc(label)}</button>`;
+    let html = '';
+    rows.forEach((row, ri) => {
+      let keys = row.map((ch) => key((!kbd.sym && kbd.shift) ? ch.toUpperCase() : ch, 'char', ch)).join('');
+      if (ri === rows.length - 1) {
+        if (!kbd.sym) keys = key('⇧', 'shift', null, 'fn wide ' + (kbd.shift ? 'on' : '')) + keys;
+        keys += key('⌫', 'bs', null, 'fn wide');
+      }
+      html += `<div class="kbd-row">${keys}</div>`;
+    });
+    html += `<div class="kbd-row">`
+      + key(kbd.sym ? 'ABC' : '?123', 'sym', null, 'fn wide')
+      + key('space', 'space', null, 'space')
+      + key('Done', 'done', null, 'done wide')
+      + `</div>`;
+    el.innerHTML = html;
+  }
+  function kbdPress(e) {
+    const btn = e.target && e.target.closest && e.target.closest('.kbd-k');
+    if (!btn) return;
+    e.preventDefault();  // keep focus in the field — no blur, no native-keyboard fight
+    const f = kbd.field;
+    const act = btn.dataset.act;
+    if (!f && act !== 'done') return;
+    if (act === 'char') kbdInsert(f, (!kbd.sym && kbd.shift) ? (btn.dataset.k || '').toUpperCase() : (btn.dataset.k || ''));
+    else if (act === 'space') kbdInsert(f, ' ');
+    else if (act === 'bs') kbdBackspace(f);
+    else if (act === 'shift') { kbd.shift = !kbd.shift; kbdRender(); }
+    else if (act === 'sym') { kbd.sym = !kbd.sym; kbdRender(); }
+    else if (act === 'done') { if (f) f.blur(); kbdClose(); }
+  }
+  function kbdInsert(f, text) {
+    if (!f || !text) return;
+    const s = f.selectionStart != null ? f.selectionStart : f.value.length;
+    const en = f.selectionEnd != null ? f.selectionEnd : f.value.length;
+    f.value = f.value.slice(0, s) + text + f.value.slice(en);
+    const p = s + text.length;
+    try { f.setSelectionRange(p, p); } catch (_) {}
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function kbdBackspace(f) {
+    if (!f) return;
+    const s = f.selectionStart != null ? f.selectionStart : f.value.length;
+    const en = f.selectionEnd != null ? f.selectionEnd : f.value.length;
+    if (s === en) { if (s === 0) return; f.value = f.value.slice(0, s - 1) + f.value.slice(en); const p = s - 1; try { f.setSelectionRange(p, p); } catch (_) {} }
+    else { f.value = f.value.slice(0, s) + f.value.slice(en); try { f.setSelectionRange(s, s); } catch (_) {} }
+    f.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   /* ---- toast ------------------------------------------------------------- */
   let toastTimer = null;
   function toast(msg) {
@@ -2438,9 +2654,9 @@
   global.UI = {
     init, go, closeModal, confirmYes,
     // auth / shell
-    chooseCashier, logout, openAdmin, exitAdmin, toggleTrainingMode, toggleTouchMode, pinKey, pinClear, pinBack,
+    chooseCashier, logout, openAdmin, exitAdmin, toggleTrainingMode, pinKey, pinClear, pinBack,
     // pos
-    setCategory, setDrinkSub, onSearch, clearSearch, addItem, itemCardKey, quickSoldOut, inc, setQty, remove, setType, setPager, setNote, hold, clear,
+    setCategory, setDrinkSub, onSearch, clearSearch, addItem, itemCardKey, soldSwipeStart, inc, setQty, remove, setType, setPager, setNote, hold, clear,
     // cashier promotions
     openPromoInfo, gotoPromos,
     // customize / discount
@@ -2460,7 +2676,7 @@
     // refund
     openRefund, refundPick, refundAll, refundReason, refundReasonSet, refundMethod, refundConfirm, printRefundVoucher,
     // dashboard
-    setReportDay, setReportFrom, setReportTo, setReportCat, setQuickRange, exportReportPDF, exportReportExcel,
+    setReportDay, setReportFrom, setReportTo, setReportCat, setQuickRange, exportReportPDF, exportReportExcel, exportAuditLog,
     // menu mgr
     setMenuTab, setPrice, toggleAvail, delItem, newItem, editItem, saveItem,
     uploadItemImage, itemFormUpload, itemFormResetImg,
@@ -2474,6 +2690,26 @@
   };
 
   document.addEventListener('DOMContentLoaded', init);
-  // keyboard: Esc closes modal
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+  // keyboard: Esc closes modal (and the on-screen keyboard)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { kbdClose(); closeModal(); } });
+
+  // On-screen keyboard wiring — touch devices only.
+  if (KBD_TOUCH) {
+    // Mark managed fields readonly *before* focus so the device's native virtual
+    // keyboard never appears — only our keyboard does (no double keyboards).
+    // JS still writes the value & caret fine on a readonly field.
+    document.addEventListener('pointerdown', (e) => {
+      if (kbdManaged(e.target)) e.target.setAttribute('readonly', 'readonly');
+    }, true);
+    document.addEventListener('focusin', (e) => {
+      if (kbdManaged(e.target)) { e.target.setAttribute('readonly', 'readonly'); kbdOpenFor(e.target); }
+    });
+    document.addEventListener('focusout', () => {
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (a && kbdManaged(a)) return;   // moved to another text field — keep it open
+        kbdClose();
+      }, 90);
+    });
+  }
 })(window);
