@@ -308,6 +308,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .pay-due strong { font-family: var(--serif); font-size: 52px; font-weight: 800; line-height: 1.05; }
 .tender-list { display: flex; flex-direction: column; gap: 6px; }
 .tender-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; padding: 11px 14px; background: var(--green-soft); border-radius: 9px; }
+.tender-row.muted { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
 .mini-x { color: var(--red); margin-left: 8px; font-size: 11px; }
 .pay-stat { display: flex; gap: 10px; }
 .pay-stat > div { flex: 1; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; text-align: center; }

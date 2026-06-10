@@ -850,15 +850,35 @@
     const cart = S.getCart();
     if (!cart.lines.length) return;
     const t = S.computeTotals(cart);
-    payState = { total: t.total, tenders: [], method: 'cash', cashInput: '' };
+    payState = {
+      total: t.total,
+      cashTotal: t.cashTotal != null ? t.cashTotal : t.total,
+      cashRoundingAdj: t.cashRoundingAdj || 0,
+      tenders: [],
+      method: 'cash',
+      cashInput: ''
+    };
     renderPaymentModal();
+  }
+  function paymentDueTotal() {
+    const hasCashTender = payState.tenders.some((p) => p.method === 'cash');
+    const hasNonCashTender = payState.tenders.some((p) => p.method !== 'cash');
+    if (hasNonCashTender || (hasCashTender && payState.method !== 'cash')) return payState.total;
+    if (hasCashTender || payState.method === 'cash') return payState.cashTotal;
+    return payState.total;
+  }
+  function paymentRoundingActive(dueTotal) {
+    return payState.cashRoundingAdj && Math.abs(dueTotal - payState.total) > 0.0001;
   }
   function renderPaymentModal() {
     const cfg = S.getConfig();
+    const dueTotal = paymentDueTotal();
     const paid = payState.tenders.reduce((s, p) => s + p.amount, 0);
-    const remaining = S.round2(Math.max(0, payState.total - paid));
-    const change = S.round2(Math.max(0, paid - payState.total));
-    const settled = paid >= payState.total - 0.0001;
+    const remaining = S.round2(Math.max(0, dueTotal - paid));
+    const change = S.round2(Math.max(0, paid - dueTotal));
+    const settled = paid >= dueTotal - 0.0001;
+    const roundingRow = paymentRoundingActive(dueTotal)
+      ? `<div class="tender-row muted"><span>Cash rounding</span><span>${money(payState.cashRoundingAdj)}</span></div>` : '';
 
     const denoms = [5, 10, 20, 50, 100];
     const cashPad = `
@@ -896,8 +916,9 @@
       <div class="pay-wrap">
         <div class="pay-summary">
           <div class="pay-due">
-            <span>Total due</span><strong>${money(payState.total)}</strong>
+            <span>Total due</span><strong>${money(dueTotal)}</strong>
           </div>
+          ${roundingRow}
           ${tendersList}
           <div class="pay-stat">
             <div><span>Tendered</span><b>${money(paid)}</b></div>
@@ -966,7 +987,7 @@
   function cardSetAmt(v) { const el = document.getElementById('card-amt'); if (el) el.value = v; }
   function payCardSend() {
     const paid = payState.tenders.reduce((s, p) => s + p.amount, 0);
-    const remaining = S.round2(Math.max(0, payState.total - paid));
+    const remaining = S.round2(Math.max(0, paymentDueTotal() - paid));
     if (remaining <= 0) return;
     const el = document.getElementById('card-amt');
     let amt = el ? (parseFloat(el.value) || 0) : remaining;
@@ -1011,7 +1032,7 @@
   }
   function payExact() {
     const paid = payState.tenders.reduce((s, p) => s + p.amount, 0);
-    payState.cashInput = String(S.round2(Math.max(0, payState.total - paid)));
+    payState.cashInput = String(S.round2(Math.max(0, paymentDueTotal() - paid)));
     syncCashDisplay();
   }
   function payTenderCash() {
@@ -1023,7 +1044,7 @@
   }
   function payTenderFull(method) {
     const paid = payState.tenders.reduce((s, p) => s + p.amount, 0);
-    const remaining = S.round2(Math.max(0, payState.total - paid));
+    const remaining = S.round2(Math.max(0, paymentDueTotal() - paid));
     if (remaining <= 0) return;
     payState.tenders.push({ method, amount: remaining });
     renderPaymentModal();

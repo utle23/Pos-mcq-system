@@ -57,7 +57,7 @@
 
   function roundCash(n, step) {
     if (!step) return round2(n);
-    return Math.round(n / step) * step;
+    return round2(Math.round(n / step) * step);
   }
 
   /* ---- in-memory state --------------------------------------------------- */
@@ -318,8 +318,8 @@
       total = round2(net + tax);
     }
 
-    const rounded = roundCash(total, c.cashRounding);
-    const roundingAdj = round2(rounded - total);
+    const cashTotal = roundCash(total, c.cashRounding);
+    const cashRoundingAdj = round2(cashTotal - total);
 
     return {
       lines,
@@ -332,9 +332,22 @@
       totalDiscount: round2(promoDiscount + manualDiscount),
       net,
       tax,
-      total: rounded,
+      total: round2(total),
+      cashTotal,
       taxInclusive: c.taxInclusive,
-      roundingAdj
+      roundingAdj: 0,
+      cashRoundingAdj
+    };
+  }
+
+  function paymentTotal(totals, payments) {
+    const hasCash = payments.some((p) => p.method === 'cash');
+    const hasNonCash = payments.some((p) => p.method !== 'cash');
+    const useCashRounding = hasCash && !hasNonCash;
+    const total = useCashRounding ? (totals.cashTotal != null ? totals.cashTotal : totals.total) : totals.total;
+    return {
+      total: round2(total),
+      roundingAdj: useCashRounding ? round2(total - totals.total) : 0
     };
   }
 
@@ -483,7 +496,7 @@
   function setLineDiscount(uidList, mode, value) {
     const set = new Set(uidList);
     state.cart.lines.forEach((l) => {
-      if (set.has(l.uid)) l.discount = { mode, value: Number(value) || 0 };
+      l.discount = set.has(l.uid) ? { mode, value: Number(value) || 0 } : { mode: 'none', value: 0 };
     });
     commit();
   }
@@ -534,8 +547,12 @@
 
   function completeOrder(payments) {
     const totals = computeTotals(state.cart);
-    const paid = payments.reduce((s, p) => s + p.amount, 0);
-    if (!state.cart.lines.length || paid < totals.total - 0.0001) return null;
+    const cleanPayments = (payments || [])
+      .map((p) => ({ method: p.method || 'cash', amount: round2(Math.max(0, Number(p.amount) || 0)) }))
+      .filter((p) => p.amount > 0);
+    const payable = paymentTotal(totals, cleanPayments);
+    const paid = cleanPayments.reduce((s, p) => s + p.amount, 0);
+    if (!state.cart.lines.length || !cleanPayments.length || paid < payable.total - 0.0001) return null;
     const now = Date.now();
     const dailyNo = nextDailyNo(now);
     const order = {
@@ -562,13 +579,13 @@
         itemCount: totals.itemCount, gross: totals.gross,
         promoDiscount: totals.promoDiscount, manualDiscount: totals.manualDiscount,
         lineManual: totals.lineManual, orderManual: totals.orderManual,
-        net: totals.net, tax: totals.tax, total: totals.total,
-        taxInclusive: totals.taxInclusive, roundingAdj: totals.roundingAdj
+        net: totals.net, tax: totals.tax, total: payable.total,
+        taxInclusive: totals.taxInclusive, roundingAdj: payable.roundingAdj
       },
       discount: clone(state.cart.discount),
-      payments: clone(payments),
+      payments: clone(cleanPayments),
       paid: round2(paid),
-      change: round2(Math.max(0, paid - totals.total)),
+      change: round2(Math.max(0, paid - payable.total)),
       status: 'paid',
       refunds: [],
       refundedTotal: 0

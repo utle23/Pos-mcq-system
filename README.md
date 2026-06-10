@@ -26,9 +26,9 @@ Design POS system for MCQ cafe/
 
 | Area | Capabilities |
 |---|---|
-| **Register (POS)** | 11 categories, 72 items, live menu search, big touch cards, one-tap add, quantity steppers, per-category section headers. Bánh Mì items are auto-labelled "… Bánh Mì" on tickets so the kitchen never confuses them with the rice/noodle version. |
-| **Customize sheet** | Per-line **✎ Customize**: **paid add-ons** (Pâté, Egg, Roast pork, Extra rice, etc. with qty steppers — added to the bill), **free preferences** (No coriander, Cut in half, Change gloves for vegetarian, No mayo/soy/pickle, Extra soy/fish sauce…) and a free-text kitchen note. |
-| **Order types** | Dine-in (table #) and Take-away (customer name). |
+| **Register (POS)** | 11 categories, 70 items, live menu search, big touch cards, one-tap add, quantity steppers, per-category section headers, and Drinks sub-categories for Mixed Juice, Smoothies, Coffee and Lemonade. Bánh Mì items are auto-labelled "… Bánh Mì" on tickets so the kitchen never confuses them with the rice/noodle version. |
+| **Customize sheet** | Per-line **✎ Customize**: **paid add-ons** (Pâté, Egg, Roast pork, Extra rice, etc. with qty steppers — added to the bill), **free preferences** (No coriander, Cut in half, Change gloves for vegetarian, No mayo/soy/pickle, Extra soy/fish sauce…), drinks-only **No ice**, and a free-text kitchen note. |
+| **Order details** | Dine-in / Take-away toggle, pager number and optional order note. |
 | **Promotions (date-aware)** | Rules with **start/end dates**: each promo is *Active / Scheduled / Expired / Disabled* and only **Active** ones apply at checkout. Default **15% OFF Bánh Mì** (excl. MCQ Special Sizzling Beef & combos). Admin manager + a **cashier promotions panel & banner** showing what's running and until when — to bill correctly alongside marketing campaigns. |
 | **Combos** | Guided combo builder: pick the Bánh Mì + the drink/coffee; fixed combo price; no promo stacking. |
 | **Discounts** | Optional order-level discount (percent or fixed amount) applied *after* the auto promo, for staff meals / comps / loyalty. |
@@ -66,7 +66,8 @@ Computed in `store.js → computeTotals()`, in this exact order:
 6. Tax (GST):
       • inclusive mode → total = net;  tax = net − net ÷ (1 + rate)
       • exclusive mode → tax = net × rate;  total = net + tax
-7. Cash rounding      = optional rounding of the final total (e.g. AU 5c)
+7. Cash rounding      = optional rounding only when the sale is paid entirely
+                        in cash (e.g. AU 5c); card/other totals stay exact
 ```
 
 The promotion engine is **rule-driven** (`data.js → PROMOTIONS`, editable in the

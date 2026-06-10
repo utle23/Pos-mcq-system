@@ -241,7 +241,7 @@
     taxRate: 0.10,            // 10% GST
     taxLabel: 'GST',
     taxInclusive: true,       // menu prices already include tax
-    cashRounding: 0,          // round cash totals to nearest (0 = off, 0.05 = AU 5c)
+    cashRounding: 0,          // round all-cash payments to nearest (0 = off, 0.05 = AU 5c)
     cashier: 'Cashier 1',     // active cashier (set on login)
     receiptFooter: 'Thank you for dining with MCQ Café! Xin cảm ơn quý khách 🌸',
     orderSeq: 1001,           // internal unique order id (never resets)
