@@ -8,6 +8,35 @@
 
   const KEY = 'mcq_pos_state_v1';
   const D = global.MCQ_DATA;
+  const ITEM_ASSET_VERSION = 11;
+  const itemAsset = (id) => 'assets/images/items/' + id + '.jpg?v=' + ITEM_ASSET_VERSION;
+  const BANH_MI_IMAGE_FIXES = {
+    'bm-fried-eggs': itemAsset('bm-fried-eggs'),
+    'bm-tofu': itemAsset('bm-tofu'),
+    'bm-bbq-brisket': itemAsset('bm-bbq-brisket')
+  };
+  const PHO_IMAGE_FIXES = {
+    'ph-pho-cup': itemAsset('ph-pho-cup')
+  };
+  const BAKERY_IMAGE_FIXES = {
+    'bk-banh-tieu-hollow': itemAsset('bk-banh-tieu-hollow'),
+    'bk-banh-tieu-dau': itemAsset('bk-banh-tieu-dau'),
+    'bk-banh-tieu-rubi': itemAsset('bk-banh-tieu-rubi'),
+    'bk-chao-quay': itemAsset('bk-chao-quay'),
+    'bk-chao-quay-rubi': itemAsset('bk-chao-quay-rubi'),
+    'bk-meat-spring-roll': itemAsset('bk-meat-spring-roll'),
+    'bk-fried-pork-dump': itemAsset('bk-fried-pork-dump'),
+    'bk-fried-banana': itemAsset('bk-fried-banana'),
+    'bk-batiso': itemAsset('bk-batiso')
+  };
+  const BAKERY_FRONT_ORDER = [
+    'bk-banh-tieu-hollow',
+    'bk-chao-quay',
+    'bk-meat-spring-roll',
+    'bk-fried-pork-dump',
+    'bk-fried-banana',
+    'bk-batiso'
+  ];
 
   /* ---- safe persistence (works even when localStorage is blocked) -------- */
   let memoryFallback = null;
@@ -131,6 +160,35 @@
       if (tofu && /wok\s*fried\s*tofu/i.test(tofu.name)) tofu.name = 'Fried Tofu';
       state.menu = state.menu.filter((m) => m.id !== 'bm-tocino');
     }
+    if (savedVer < 11) {
+      // Menu photo cleanup: replace older uploaded/mis-mapped images while
+      // preserving each item's current price and other manager edits.
+      Object.entries(Object.assign({}, BAKERY_IMAGE_FIXES, BANH_MI_IMAGE_FIXES, PHO_IMAGE_FIXES)).forEach(([id, img]) => {
+        const m = state.menu.find((x) => x.id === id);
+        if (m) m.img = img;
+      });
+      const bateso = state.menu.find((m) => m.id === 'bk-batiso');
+      if (bateso && bateso.name === 'Batiso') bateso.name = 'Bateso';
+      reorderCategoryFirst('bakery', BAKERY_FRONT_ORDER);
+    }
+  }
+
+  function reorderCategoryFirst(catId, firstIds) {
+    const firstCategoryIndex = state.menu.findIndex((m) => m.cat === catId);
+    if (firstCategoryIndex < 0) return;
+
+    const categoryItems = state.menu.filter((m) => m.cat === catId);
+    const byId = new Map(categoryItems.map((m) => [m.id, m]));
+    const firstSet = new Set(firstIds);
+    const orderedCategory = firstIds
+      .map((id) => byId.get(id))
+      .filter(Boolean)
+      .concat(categoryItems.filter((m) => !firstSet.has(m.id)));
+
+    const otherItems = state.menu.filter((m) => m.cat !== catId);
+    state.menu = otherItems
+      .slice(0, firstCategoryIndex)
+      .concat(orderedCategory, otherItems.slice(firstCategoryIndex));
   }
 
   function persist() {
@@ -195,6 +253,8 @@
   // IMPORTANT: the percentage applies to the BASE price only — never to paid
   // add-ons (e.g. you don't give 15% off an added $5 roast pork).
   function linePromo(line) {
+    const menuItem = findItem(line.itemId);
+    if (line.noDiscount || (menuItem && menuItem.noDiscount)) return null;
     for (const p of state.promotions) {
       if (!promotionActiveNow(p)) continue;
       if (p.type === 'category_percent') {
@@ -304,7 +364,8 @@
       discount: opts.discount || { mode: 'none', value: 0 }, // per-line admin discount
       isCombo: !!item.isCombo,
       components: opts.components || [], // [{slot, name, itemId}]
-      takeawayOnly: !!item.takeawayOnly
+      takeawayOnly: !!item.takeawayOnly,
+      noDiscount: !!item.noDiscount
     };
   }
 
@@ -468,6 +529,7 @@
   function completeOrder(payments) {
     const totals = computeTotals(state.cart);
     const paid = payments.reduce((s, p) => s + p.amount, 0);
+    if (!state.cart.lines.length || paid < totals.total - 0.0001) return null;
     const now = Date.now();
     const dailyNo = nextDailyNo(now);
     const order = {
@@ -487,7 +549,7 @@
         components: l.components, note: l.note, addons: l.addons || [], mods: l.mods || [],
         lineGross: l.lineGross, lineDiscount: l.lineDiscount, lineNet: l.lineNet,
         lineManual: l.lineManual || 0, discount: clone(l.discount || { mode: 'none', value: 0 }),
-        promoName: l.promo ? l.promo.name : null, cat: l.cat,
+        promoName: l.promo ? l.promo.name : null, cat: l.cat, noDiscount: !!l.noDiscount,
         refundedQty: 0
       })),
       totals: {
@@ -518,9 +580,12 @@
   function searchOrders(query) {
     const q = String(query || '').trim().toLowerCase();
     if (!q) return [];
-    const num = q.replace('#', '');
+    const num = q.replace(/^#/, '');
     return state.orders.filter((o) =>
       String(o.id).includes(num) ||
+      String(o.code || '').toLowerCase().includes(num) ||
+      String(o.ref || '').toLowerCase().includes(q) ||
+      (o.pager && String(o.pager).toLowerCase().includes(q)) ||
       (o.table && String(o.table).toLowerCase().includes(q)) ||
       (o.customer && o.customer.toLowerCase().includes(q))
     );
@@ -724,7 +789,6 @@
       summary.tax += o.totals.tax * keepRatio;
       summary.promoDiscount += o.totals.promoDiscount;
       summary.manualDiscount += o.totals.manualDiscount;
-      summary.items += o.totals.itemCount;
       if (o.orderType === 'dine-in') summary.dineIn++; else summary.takeAway++;
 
       const hr = new Date(o.createdAt).getHours();
@@ -742,6 +806,7 @@
         const soldQty = l.qty - (l.refundedQty || 0);
         if (soldQty <= 0) return;
         const perUnitNet = l.lineNet / l.qty;
+        summary.items += soldQty;
         summary.byCategory[l.cat] = (summary.byCategory[l.cat] || 0) + perUnitNet * soldQty;
         if (!summary.byItem[l.name]) summary.byItem[l.name] = { qty: 0, revenue: 0, cat: l.cat };
         summary.byItem[l.name].qty += soldQty;

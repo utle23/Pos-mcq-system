@@ -119,19 +119,19 @@
 
     // 🥐 Bakery & Snacks
     { id: 'bk-banh-tieu-hollow',  cat: 'bakery', name: 'Banh Tieu (Hollow Sesame Donut)', price: 3 },
-    { id: 'bk-banh-tieu-dau',     cat: 'bakery', name: 'Banh Tieu Dau (Sesame Donut)',    price: 3 },
     { id: 'bk-chao-quay',         cat: 'bakery', name: 'Chao Quay (Chinese Doughnut)',    price: 3 },
+    { id: 'bk-meat-spring-roll',  cat: 'bakery', name: 'Meat Spring Roll',                price: 2.5 },
+    { id: 'bk-fried-pork-dump',   cat: 'bakery', name: 'Fried Pork Dumpling',             price: 3 },
+    { id: 'bk-fried-banana',      cat: 'bakery', name: 'Fried Banana',                    price: 3 },
+    { id: 'bk-batiso',            cat: 'bakery', name: 'Bateso',                          price: 3 },
+    { id: 'bk-banh-tieu-dau',     cat: 'bakery', name: 'Banh Tieu Dau (Sesame Donut)',    price: 3 },
     { id: 'bk-mung-bean-ball',    cat: 'bakery', name: 'Mung Bean Sesame Ball',           price: 3 },
     { id: 'bk-red-bean-ball',     cat: 'bakery', name: 'Red Bean Sesame Ball',            price: 3 },
     { id: 'bk-banh-bao',          cat: 'bakery', name: 'Banh Bao (Steam Bun)',            price: 5.5 },
     { id: 'bk-banh-tai-yen',      cat: 'bakery', name: 'Banh Tai Yen (Bird Nest Cake)',   price: 2.5 },
-    { id: 'bk-batiso',            cat: 'bakery', name: 'Batiso',                          price: 3 },
-    { id: 'bk-fried-pork-dump',   cat: 'bakery', name: 'Fried Pork Dumpling',             price: 3 },
-    { id: 'bk-fried-banana',      cat: 'bakery', name: 'Fried Banana',                    price: 3 },
     { id: 'bk-chao-quay-rubi',    cat: 'bakery', name: 'Chao Quay (Rubi Bakery)',         price: 3 },
     { id: 'bk-banh-tieu-rubi',    cat: 'bakery', name: 'Banh Tieu (Rubi Bakery)',         price: 3 },
     { id: 'bk-banh-cam-rubi',     cat: 'bakery', name: 'Banh Cam (Rubi Bakery)',          price: 3 },
-    { id: 'bk-meat-spring-roll',  cat: 'bakery', name: 'Meat Spring Roll',                price: 2.5 },
     { id: 'bk-chicken-curry-puff', cat: 'bakery', name: 'Chicken Curry Puffs',            price: 3 }
   ];
 
@@ -225,7 +225,7 @@
 
   // ---- Default store configuration -----------------------------------------
   const CONFIG = {
-    seedVersion: 7,            // bump to migrate persisted store details
+    seedVersion: 11,           // bump to migrate persisted store details
     storeName: 'MCQ Café',
     tagline: 'Vietnamese Street Food',
     address: 'Shop MM4/43 Yirrigan Dr, Mirrabooka WA 6061',
@@ -254,6 +254,6 @@
     MODIFIER_GROUPS,
     PROMOTIONS,
     CONFIG,
-    VERSION: 7
+    VERSION: 11
   };
 })(window);

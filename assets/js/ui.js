@@ -13,6 +13,9 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const money = (n) => S.money(n);
+  const ITEM_ASSET_VERSION = 11;
+  const itemAsset = (id) => 'assets/images/items/' + id + '.jpg?v=' + ITEM_ASSET_VERSION;
+  const itemImage = (item) => item.img || itemAsset(item.id);
 
   const ui = {
     view: 'register', currentUser: null, adminUnlocked: false,
@@ -27,7 +30,7 @@
 
   /* ---- item promo preview (reuses the pricing engine) -------------------- */
   function itemPromo(item) {
-    return S.linePromo({ cat: item.cat, isCombo: item.isCombo, itemId: item.id, unitPrice: item.price, qty: 1 });
+    return S.linePromo({ cat: item.cat, isCombo: item.isCombo, itemId: item.id, unitPrice: item.price, qty: 1, noDiscount: item.noDiscount });
   }
 
   /* ---- promotion helpers (shared by banner, section head, info panel) ---- */
@@ -305,6 +308,7 @@
         <div class="pos-menu">
           ${renderPromoBanner()}
           ${renderCatBar()}
+          ${renderSearchBar()}
           <div id="sec-head">${renderSectionHead()}</div>
           <div id="menu-grid" class="menu-grid">${renderGrid()}</div>
         </div>
@@ -377,14 +381,14 @@
       const blockedTakeaway = item.takeawayOnly && cart.orderType === 'dine-in';
       const disabled = soldOut || blockedTakeaway;
       const cat = S.getCategories().find((c) => c.id === item.cat) || {};
-      const img = item.img || ('assets/images/items/' + item.id + '.jpg');
+      const img = itemImage(item);
       return `
-        <button class="m-card ${disabled ? 'disabled' : ''} ${item.isCombo ? 'combo' : ''}"
+        <article class="m-card ${disabled ? 'disabled' : ''} ${item.isCombo ? 'combo' : ''}"
           style="--accent:${cat.accent || '#c79a3f'}"
-          ${disabled ? 'disabled' : `onclick="UI.addItem('${item.id}')"`}>
+          ${disabled ? 'aria-disabled="true"' : `role="button" tabindex="0" onclick="UI.addItem('${item.id}')" onkeydown="UI.itemCardKey(event,'${item.id}')"`}>
           <div class="m-thumb">
             <span class="m-thumb-ico">${cat.icon || '🍽️'}</span>
-            <img src="${img}" alt="" loading="lazy" onerror="this.remove();this.parentNode.classList.add('noimg')">
+            <img src="${esc(img)}" alt="${esc(item.name)}" width="480" height="360" loading="lazy" decoding="async" onerror="this.remove();this.parentNode.classList.add('noimg')">
             <span class="m-thumb-scrim"></span>
             ${promo ? `<span class="m-badge">−${promo.perUnit ? Math.round(promo.perUnit / item.price * 100) : 15}%</span>` : ''}
             ${item.takeawayOnly ? `<span class="m-tag takeaway">Take-away</span>` : ''}
@@ -397,7 +401,7 @@
                 : `<span>${money(item.price)}</span>`}
             </div>
           </div>
-        </button>`;
+        </article>`;
     }).join('');
   }
 
@@ -508,6 +512,11 @@
     if (item.isCombo) return openCombo(item);
     S.addItem(id);
     toast(item.name + ' added');
+  }
+  function itemCardKey(event, id) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    addItem(id);
   }
   const inc = (uid, d) => S.incQty(uid, d);
   const remove = (uid) => S.removeLine(uid);
@@ -1022,6 +1031,7 @@
   function payRemove(i) { payState.tenders.splice(i, 1); renderPaymentModal(); }
   function completeSale() {
     const order = S.completeOrder(payState.tenders);
+    if (!order) return toast('Payment is not fully tendered');
     closeModal();
     showReceipt(order, true);
   }
@@ -1788,7 +1798,7 @@
         <div class="mm-list">
           ${items.map((m) => `<div class="mm-row mm-item ${m.available === false ? 'off' : ''}">
             <button class="mm-thumb" title="Upload / change photo" onclick="UI.uploadItemImage('${m.id}')">
-              <img src="${m.img || ('assets/images/items/' + m.id + '.jpg')}" alt="" onerror="this.style.display='none';this.parentNode.classList.add('noimg')">
+              <img src="${esc(itemImage(m))}" alt="${esc(m.name)}" width="480" height="360" onerror="this.style.display='none';this.parentNode.classList.add('noimg')">
               <span class="mm-thumb-ico">📷</span>
             </button>
             <span class="mm-name">${esc(m.name)}
@@ -2004,7 +2014,7 @@
     const isNew = !item;
     itemImgDraft = null;
     const cats = S.getCategories();
-    const previewSrc = item ? (item.img || ('assets/images/items/' + item.id + '.jpg')) : '';
+    const previewSrc = item ? itemImage(item) : '';
     openModal(modalShell(isNew ? 'New item' : 'Edit · ' + esc(item.name), `
       <div class="form">
         <div class="form-img">
@@ -2044,7 +2054,7 @@
   }
   function itemFormResetImg(id) {
     itemImgDraft = '';
-    setFormImg(id ? 'assets/images/items/' + id + '.jpg' : '');
+    setFormImg(id ? itemAsset(id) : '');
   }
   function saveItem(id) {
     const name = $('#f-name').value.trim();
@@ -2258,7 +2268,7 @@
     // auth / shell
     chooseCashier, logout, openAdmin, exitAdmin, pinKey, pinClear, pinBack,
     // pos
-    setCategory, setDrinkSub, onSearch, clearSearch, addItem, inc, remove, setType, setPager, setNote, hold, clear,
+    setCategory, setDrinkSub, onSearch, clearSearch, addItem, itemCardKey, inc, remove, setType, setPager, setNote, hold, clear,
     // cashier promotions
     openPromoInfo, gotoPromos,
     // customize / discount
