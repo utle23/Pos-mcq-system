@@ -207,7 +207,8 @@
       <div class="login-collage" aria-hidden="true">
         <div class="lc-panel"><img src="assets/images/login-bg.jpg?v=27" alt=""></div>
         <div class="lc-panel lc-video">
-          <video src="${LOGIN_VIDS[0]}" autoplay muted playsinline
+          <video src="${LOGIN_VIDS[0]}" autoplay muted playsinline preload="auto"
+            poster="assets/images/food-spread.jpg"
             onended="UI.loginNextVid(this)" onerror="this.classList.add('gone')"></video>
         </div>
         <div class="lc-panel"><img src="assets/images/food-spread.jpg" alt=""></div>
@@ -2719,7 +2720,7 @@
     return `<div class="cust2${parts.rootClass}">
       <button class="screen-exit" onclick="UI.exitScreen()" title="Exit to admin">✕</button>
       <div class="cust2-media">
-        <video class="cust2-vid" src="assets/videos/vid-847.mp4" autoplay muted loop playsinline onerror="this.classList.add('gone')"></video>
+        <video class="cust2-vid" src="assets/videos/vid-847.mp4" autoplay muted loop playsinline preload="auto" poster="assets/images/backscreen-bg.jpg" onerror="this.classList.add('gone')"></video>
         <div class="cust2-media-scrim" aria-hidden="true"></div>
         <div class="cust2-brand">
           ${c.logo ? `<img class="cust2-logo" src="${esc(c.logo)}" alt="">` : ''}
@@ -3212,7 +3213,8 @@
     const marquee = kioskPopular(8).map((it) => `${esc(it.name)} · ${money(it.price)}`).join('  🥢  ');
     return `<div class="kx-attract" onclick="UI.kioskGo('home')">
       <img class="kx-bg" src="assets/images/login-bg.jpg?v=23" alt="" aria-hidden="true">
-      <video class="kx-video" src="${KIOSK_ADS[0]}" autoplay muted playsinline
+      <video class="kx-video" src="${KIOSK_ADS[0]}" autoplay muted playsinline preload="auto"
+        poster="assets/images/login-bg.jpg?v=27"
         onended="UI.kioskNextAd(this)" onerror="this.classList.add('gone')"></video>
       <div class="kx-attract-scrim" aria-hidden="true"></div>
       <div class="kx-lanterns" aria-hidden="true">${'<span>🏮</span>'.repeat(6)}</div>
@@ -3274,7 +3276,8 @@
       ${kioskBar()}
       <div class="kx-home-hero">
         <div class="kx-home-media">
-          <video class="kx-home-vid" src="${KIOSK_HOME_VIDS[0]}" autoplay muted playsinline
+          <video class="kx-home-vid" src="${KIOSK_HOME_VIDS[0]}" autoplay muted playsinline preload="auto"
+            poster="assets/images/vietnam-hero.jpg"
             onended="UI.kioskNextHomeAd(this)" onerror="this.classList.add('gone')"></video>
           <div class="kx-home-media-fb" aria-hidden="true"><img src="assets/images/vietnam-hero.jpg" alt=""></div>
         </div>
