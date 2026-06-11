@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCQ Café POS — User Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f1a15; --ink2:#50473d; --muted:#857a68;
+    --gold:#c79a3f; --gold2:#a87e28; --gold3:#8a661d; --goldsoft:#f4e9cd;
+    --line:#e7ddca; --cream:#fcf7ee; --cream2:#f8f1e2; --green:#267350; --red:#9b2226;
+    --serif:'Playfair Display',Georgia,serif; --sans:'Inter',-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  body{margin:0;font-family:var(--sans);color:var(--ink);font-size:10.2pt;line-height:1.5;}
+  h1,h2,h3,h4{font-family:var(--serif);color:var(--ink);line-height:1.18;}
+  p{margin:0 0 9px;}
+  a{color:var(--gold3);}
+  code{font-family:'SF Mono',Menlo,monospace;background:var(--cream2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.86em;color:var(--gold3);}
+  ul,ol{margin:0 0 10px;padding-left:20px;}
+  li{margin:3px 0;}
+  strong{color:var(--ink);}
+
+  /* ---- page flow ---- */
+  .chapter{margin-top:15px;}
+  .chapter:first-of-type{margin-top:0;}
+  .toc{page-break-after:always;}
+  h2.h,h3,h4{page-break-after:avoid;}
+  .avoid{page-break-inside:avoid;}
+
+  /* ---- cover ---- */
+  .cover{position:relative;height:247mm;display:flex;flex-direction:column;justify-content:center;
+    color:#f6e8d2;text-align:center;padding:0 22mm;overflow:hidden;border-radius:2px;
+    background:radial-gradient(120% 80% at 50% 0%,#5a3a22 0%,#2a1810 55%,#1a120b 100%);page-break-after:always;}
+  .cover .lantern{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-around;font-size:30pt;opacity:.9;}
+  .cover .eyebrow{letter-spacing:6px;text-transform:uppercase;color:var(--gold);font-weight:800;font-size:11pt;margin-bottom:14px;}
+  .cover h1{font-size:46pt;font-weight:800;color:#fff;margin:0 0 6px;text-shadow:0 6px 30px rgba(0,0,0,.5);}
+  .cover .sub{font-size:16pt;color:#f0e0c2;font-family:var(--serif);font-style:italic;margin-bottom:30px;}
+  .cover .rule{width:80px;height:3px;background:var(--gold);margin:0 auto 30px;border-radius:3px;}
+  .cover .tag{display:inline-block;border:1.5px solid rgba(199,154,63,.6);border-radius:30px;padding:9px 22px;color:var(--gold);font-weight:700;font-size:11pt;margin:5px;}
+  .cover .foot{position:absolute;left:0;right:0;bottom:24mm;color:#cdbfa6;font-size:10pt;}
+  .cover .foot b{color:#f6e8d2;}
+
+  /* ---- headings ---- */
+  h2.h{font-size:23pt;font-weight:800;margin:0 0 4px;padding-bottom:8px;border-bottom:3px solid var(--gold);}
+  .kicker{color:var(--gold2);font-weight:800;letter-spacing:2px;text-transform:uppercase;font-size:8.5pt;margin-bottom:6px;}
+  h3{font-size:13.5pt;font-weight:700;margin:13px 0 5px;color:var(--ink);}
+  h4{font-size:11.5pt;font-weight:700;margin:14px 0 4px;color:var(--gold3);}
+
+  /* ---- figures ---- */
+  figure{margin:11px 0 5px;page-break-inside:avoid;}
+  figure img{width:52%;max-width:99mm;border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 22px -12px rgba(0,0,0,.35);display:block;margin:0 auto;}
+  figcaption{font-size:8.5pt;color:var(--muted);margin-top:5px;text-align:center;font-style:italic;}
+
+  /* ---- callouts ---- */
+  .box{border-radius:9px;padding:11px 15px;margin:12px 0;page-break-inside:avoid;border:1px solid var(--line);background:var(--cream);}
+  .box .bt{font-weight:800;font-size:9.4pt;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+  .tip{background:#eef7f0;border-color:#bfe3cd;} .tip .bt{color:var(--green);}
+  .warn{background:#fdf3f2;border-color:#f0cdca;} .warn .bt{color:var(--red);}
+  .note{background:var(--goldsoft);border-color:var(--gold);} .note .bt{color:var(--gold3);}
+
+  /* ---- tables ---- */
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:9.6pt;page-break-inside:avoid;}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;}
+  th{background:var(--ink);color:#f6e8d2;font-weight:700;}
+  tr:nth-child(even) td{background:var(--cream);}
+  td code{font-size:.95em;}
+
+  .lead{font-size:11.6pt;color:var(--ink2);margin-bottom:12px;}
+  .pill{display:inline-block;background:var(--goldsoft);color:var(--gold3);border:1px solid var(--gold);border-radius:20px;padding:1px 9px;font-size:8.6pt;font-weight:700;}
+  .twocol{column-count:2;column-gap:20px;}
+  .twocol li{break-inside:avoid;}
+
+  /* TOC */
+  .toc h2{border:none;}
+  .toc ol{list-style:none;padding:0;font-size:11pt;}
+  .toc>ol>li{margin:7px 0;font-weight:700;border-bottom:1px dotted var(--line);padding-bottom:6px;}
+  .toc .num{display:inline-block;width:26px;color:var(--gold2);}
+  .toc ul{list-style:none;padding-left:26px;margin:4px 0;font-weight:400;color:var(--ink2);font-size:9.8pt;}
+</style>
+</head>
+<body>
+
+<!-- ====================== COVER ====================== -->
+<section class="cover">
+  <div class="lantern">🏮 🏮 🏮 🏮 🏮 🏮</div>
+  <div class="eyebrow">Point of Sale System</div>
+  <h1>MCQ Café</h1>
+  <div class="sub">User Guide &amp; Feature Manual</div>
+  <div class="rule"></div>
+  <div>
+    <span class="tag">Cashier Register</span>
+    <span class="tag">Self-Service Kiosk</span>
+    <span class="tag">Reports &amp; Refunds</span>
+  </div>
+  <div class="foot">
+    Vietnamese Street Kitchen · Browser-based POS<br>
+    <b>Version 30</b> &nbsp;·&nbsp; Last updated 11 June 2026
+  </div>
+</section>
+
+<!-- ====================== TOC ====================== -->
+<section class="toc">
+  <div class="kicker">Contents</div>
+  <h2 class="h">Table of Contents</h2>
+  <ol>
+    <li><span class="num">1</span> Introduction &amp; Overview</li>
+    <li><span class="num">2</span> Opening the App &amp; Requirements</li>
+    <li><span class="num">3</span> Accounts, Passwords &amp; Access Rights
+      <ul><li>Default accounts · Roles · Logging in · Managing staff</li></ul></li>
+    <li><span class="num">4</span> The Register (Taking Orders)</li>
+    <li><span class="num">5</span> Customising Items &amp; Combos</li>
+    <li><span class="num">6</span> Order Details, Discounts &amp; Held Tickets</li>
+    <li><span class="num">7</span> Payments (Cash, Card &amp; Split)</li>
+    <li><span class="num">8</span> Receipts</li>
+    <li><span class="num">9</span> Promotions</li>
+    <li><span class="num">10</span> Transaction History, Refunds &amp; Voids</li>
+    <li><span class="num">11</span> Dashboard &amp; Reports</li>
+    <li><span class="num">12</span> Menu Manager</li>
+    <li><span class="num">13</span> Settings</li>
+    <li><span class="num">14</span> The Admin Hub</li>
+    <li><span class="num">15</span> Customer Display (Second Screen)</li>
+    <li><span class="num">16</span> Standing Order Tree — Self-Service Kiosk
+      <ul><li>Attract · Home · Menu · Item sheet · Checkout · Confirmation</li></ul></li>
+    <li><span class="num">17</span> Loyalty &amp; Membership</li>
+    <li><span class="num">18</span> Data, Storage &amp; Backup</li>
+    <li><span class="num">19</span> Keyboard, Touch &amp; Tips</li>
+    <li><span class="num">20</span> Troubleshooting &amp; FAQ</li>
+    <li><span class="num">A</span> Appendix — Quick Reference (Logins &amp; Pricing)</li>
+  </ol>
+</section>
+
+<!-- ====================== 1. INTRO ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 1</div>
+  <h2 class="h">1 · Introduction &amp; Overview</h2>
+  <p class="lead">MCQ Café POS is a complete point-of-sale system for a Vietnamese street-food café. It runs entirely inside a web browser — there is nothing to install and no server logic to maintain.</p>
+
+  <p>The system has two faces that share one menu, one set of prices and one sales history:</p>
+  <ul>
+    <li><strong>The Register</strong> — the staff-facing till where cashiers ring up orders, take payments, print receipts, process refunds and read reports.</li>
+    <li><strong>The Standing Order Tree</strong> — a self-service kiosk where customers browse the menu, build their order, pay by card and receive a queue number. Kiosk orders flow straight into the same sales history the cashier can look up.</li>
+  </ul>
+
+  <h3>What's included</h3>
+  <table>
+    <tr><th style="width:32%">Area</th><th>What it does</th></tr>
+    <tr><td><strong>Register</strong></td><td>11 categories, ~70 items, live search, one-tap add, quantity steppers, per-item customise sheet, guided combos, dine-in / take-away, pager numbers and order notes.</td></tr>
+    <tr><td><strong>Payments</strong></td><td>Split payment across Cash / Card / Other, cash keypad with auto-change, simulated card (EFTPOS) flow, optional cash rounding.</td></tr>
+    <tr><td><strong>Receipts</strong></td><td>Branded, printable receipts with your logo; reprint any past sale.</td></tr>
+    <tr><td><strong>Promotions</strong></td><td>Date-aware discount rules that switch on and off automatically.</td></tr>
+    <tr><td><strong>History &amp; Refunds</strong></td><td>Look up any sale; full or per-item refunds; voids; full audit trail.</td></tr>
+    <tr><td><strong>Dashboard</strong></td><td>Live KPIs, sales by category, payment mix, top sellers, and exports to PDF &amp; Excel.</td></tr>
+    <tr><td><strong>Menu Manager</strong></td><td>Edit prices, enable/disable items, manage add-ons and promotions.</td></tr>
+    <tr><td><strong>Settings</strong></td><td>Store details, logo, tax, staff accounts, and data backup.</td></tr>
+    <tr><td><strong>Self-Service Kiosk</strong></td><td>Customer-facing ordering with EN/VI language, customise sheet, upsell and queue tickets.</td></tr>
+  </table>
+
+  <div class="box note"><div class="bt">In a nutshell</div>Everything is saved in the browser on the device it runs on. Open the web address, log in with a PIN, and start selling.</div>
+</section>
+
+<!-- ====================== 2. OPENING ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 2</div>
+  <h2 class="h">2 · Opening the App &amp; Requirements</h2>
+
+  <h3>Requirements</h3>
+  <ul>
+    <li>A modern web browser — <strong>Google Chrome</strong> or Microsoft Edge is recommended (Safari and Firefox also work).</li>
+    <li>A device with a screen: a desktop, laptop, or — ideally for the counter and kiosk — a touchscreen tablet.</li>
+    <li>JavaScript enabled (it is on by default).</li>
+  </ul>
+
+  <h3>Opening it</h3>
+  <ol>
+    <li>Open your browser and go to the web address where the system is hosted (for example <code>https://mcqcafeorderingsystem.pythonanywhere.com</code>).</li>
+    <li>The <strong>Login</strong> screen appears. Choose your account and enter your PIN (see Chapter 3).</li>
+    <li>For the best experience, run the browser in full-screen / kiosk mode on the tablet.</li>
+  </ol>
+
+  <div class="box tip"><div class="bt">Tip — one tablet per role</div>Run the <strong>Register</strong> on the staff tablet, and open the <strong>Standing Order Tree</strong> on a second tablet for customers. Each device keeps its own copy of the data (see Chapter 18).</div>
+
+  <h3>The screen layout</h3>
+  <p>Once you log in, a slim navigation rail sits on the left and a top bar shows the clock, the signed-in cashier and quick actions (such as <strong>Reprint last</strong>). The large area in the middle changes depending on what you are doing — selling, reading reports, or editing the menu.</p>
+</section>
+
+<!-- ====================== 3. ACCOUNTS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 3</div>
+  <h2 class="h">3 · Accounts, Passwords &amp; Access Rights</h2>
+  <p class="lead">The system ships with three staff accounts. Each one logs in with a 4-digit PIN. There are two permission levels: <strong>Manager</strong> (full access) and <strong>Cashier</strong> (register only).</p>
+
+  <h3>Default accounts &amp; PINs</h3>
+  <table>
+    <tr><th>Account</th><th>Default PIN</th><th>Role</th><th>What they can do</th></tr>
+    <tr><td><strong>Manager</strong></td><td><code>1234</code></td><td><span class="pill">Admin</span></td><td>Everything — register, reports, refunds, menu, settings, staff.</td></tr>
+    <tr><td><strong>Cashier 1</strong></td><td><code>1111</code></td><td>User</td><td>Register, history lookup &amp; reprint. Manager PIN required for refunds, voids, discounts and admin areas.</td></tr>
+    <tr><td><strong>Cashier 2</strong></td><td><code>2222</code></td><td>User</td><td>Same as Cashier 1.</td></tr>
+  </table>
+
+  <div class="box warn"><div class="bt">Change these PINs before going live</div>These defaults are public knowledge. In <strong>Settings → Staff</strong> (Chapter 13) give every real staff member their own account and PIN, and change the Manager PIN.</div>
+
+  <figure><img src="img/01-login.jpg" alt="Login screen"><figcaption>The login screen — choose your account, then enter your 4-digit PIN on the keypad.</figcaption></figure>
+
+  <h3>Logging in</h3>
+  <ol>
+    <li>On the Login screen, tap your account tile.</li>
+    <li>Enter your 4-digit PIN on the keypad. The screen unlocks automatically once the 4th digit is correct.</li>
+    <li>To switch user or finish a shift, use <strong>Log out</strong> from the navigation rail.</li>
+  </ol>
+
+  <h3>Access rights — who can do what</h3>
+  <p>A <strong>Cashier</strong> can run the register and look up / reprint past sales. The following areas and actions are reserved for a <strong>Manager</strong> — if a cashier tries to use them, a quick <em>Manager PIN</em> prompt appears. Once entered, manager access stays unlocked for the rest of the shift on that device.</p>
+  <table>
+    <tr><th>Manager-only area / action</th><th>Where</th></tr>
+    <tr><td>Dashboard &amp; reports</td><td>Navigation rail</td></tr>
+    <tr><td>Transaction History — <em>refunds &amp; voids</em></td><td>History screen</td></tr>
+    <tr><td>Order &amp; item discounts</td><td>Register → % Discount</td></tr>
+    <tr><td>Menu Manager (prices, items, add-ons, promotions)</td><td>Navigation rail</td></tr>
+    <tr><td>Settings (store, tax, staff, data)</td><td>Navigation rail</td></tr>
+    <tr><td>Audit log</td><td>Admin hub</td></tr>
+    <tr><td>Till "Z" reading (ring off the day)</td><td>Dashboard</td></tr>
+  </table>
+  <div class="box note"><div class="bt">Training mode</div>The Manager can switch on <strong>Training mode</strong> to practise without affecting real sales — training receipts are marked and excluded from takings, reports and stock figures.</div>
+</section>
+
+<!-- ====================== 4. REGISTER ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 4</div>
+  <h2 class="h">4 · The Register (Taking Orders)</h2>
+  <p class="lead">The Register is the heart of the counter. The menu fills the centre; the live order (the "cart") sits on the right.</p>
+
+  <figure><img src="img/02-register.jpg" alt="Register screen"><figcaption>The Register — category chips and a touch-friendly product grid on the left, the live order on the right.</figcaption></figure>
+
+  <h3>Building an order</h3>
+  <ul>
+    <li><strong>Choose a category</strong> from the chips along the top (Bánh Mì, Phở &amp; Bún, Rice, Drinks, Combos, Bakery…). The Drinks group reveals sub-categories (Juice, Smoothies, Coffee, Lemonade).</li>
+    <li><strong>Search</strong> any item by name using the search box.</li>
+    <li><strong>Tap a product card</strong> to add it to the order. Tap again to increase the quantity.</li>
+    <li>In the order list, use the <strong>−&nbsp;/&nbsp;+</strong> stepper or the quick <strong>×2 / ×3 / ×5</strong> buttons to set quantity, and the <strong>🗑</strong> button to remove a line.</li>
+  </ul>
+  <div class="box tip"><div class="bt">Bánh Mì labelling</div>Bánh Mì items are automatically tagged "… Bánh Mì" on the order and receipt, so the kitchen never confuses them with the rice or noodle version of the same protein.</div>
+
+  <h3>The order panel</h3>
+  <p>On the right you'll find the running subtotal, any promotions, tax and the grand total, plus the big <strong>Charge</strong> button. Above the items you can set the order type, attach a member and add a pager number — covered next.</p>
+</section>
+
+<!-- ====================== 5. CUSTOMISE ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 5</div>
+  <h2 class="h">5 · Customising Items &amp; Combos</h2>
+
+  <h3>The Customise sheet</h3>
+  <p>Tap <strong>✎ Customize</strong> on any order line to open the Customise sheet. It offers three kinds of options:</p>
+  <ul>
+    <li><strong>Paid add-ons</strong> — e.g. Pâté (+$1), Egg (+$2), Roast pork (+$5), Extra rice (+$2). Each has its own − / + stepper and is added to the bill.</li>
+    <li><strong>Free preferences</strong> — kitchen instructions at no charge, e.g. <em>No coriander, Cut in half, Less spicy, No ice, Change gloves (vegetarian)</em>.</li>
+    <li><strong>Kitchen note</strong> — a free-text note for anything special.</li>
+  </ul>
+
+  <figure><img src="img/03-customize.jpg" alt="Customize sheet"><figcaption>The Customise sheet — paid add-ons with steppers (top), free preferences as chips (below), and a kitchen note.</figcaption></figure>
+
+  <h3>Combos</h3>
+  <p>Combo deals (e.g. <em>Bánh Mì + Drink</em>) open a guided builder: pick the Bánh Mì, then pick the drink or coffee. The combo has a single fixed price and does not stack with the automatic Bánh Mì promotion.</p>
+</section>
+
+<!-- ====================== 6. ORDER DETAILS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 6</div>
+  <h2 class="h">6 · Order Details, Discounts &amp; Held Tickets</h2>
+
+  <h3>Order details</h3>
+  <ul>
+    <li><strong>Dine-in / Take-away</strong> — toggle at the top of the order panel.</li>
+    <li><strong>Pager number</strong> and an optional <strong>order note</strong> can be added for the kitchen / hand-off.</li>
+    <li><strong>Scan / add member</strong> — attach a loyalty member so the sale earns points (Chapter 17).</li>
+  </ul>
+
+  <h3>Discounts <span class="pill">Manager</span></h3>
+  <p>Tap <strong>% Discount</strong> to apply an order-level or per-item discount as a percentage or a fixed amount — useful for staff meals, comps or goodwill. A discount always requires a Manager PIN, and is applied <em>after</em> any automatic promotion.</p>
+
+  <h3>Holding a ticket (Suspend)</h3>
+  <p>Tap <strong>⏸ Suspend</strong> to park the current order and start a fresh one — handy when a customer steps away. Recall it later from the <strong>Suspended</strong> button. <strong>Clear</strong> empties the current order.</p>
+</section>
+
+<!-- ====================== 7. PAYMENTS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 7</div>
+  <h2 class="h">7 · Payments (Cash, Card &amp; Split)</h2>
+  <p class="lead">Tap <strong>Charge</strong> to open the payment screen. You can take one tender or split the total across several.</p>
+
+  <figure><img src="img/04-payment.jpg" alt="Payment screen"><figcaption>The payment screen — choose Cash, Card or Other; the cash keypad offers quick denominations and auto-change.</figcaption></figure>
+
+  <h3>Cash</h3>
+  <ul>
+    <li>Enter the amount tendered on the keypad, or tap a <strong>quick denomination</strong> ($10, $20, $50…).</li>
+    <li><strong>Change due</strong> is calculated automatically.</li>
+    <li>Optional <strong>cash rounding</strong> (e.g. to the nearest 5¢) can be enabled in Settings; it only applies when the whole sale is paid in cash.</li>
+  </ul>
+
+  <h3>Card</h3>
+  <p>Card runs a <strong>simulated EFTPOS terminal flow</strong>: the amount is "pushed to the terminal", the screen shows <em>Waiting…</em>, then <em>Approved</em>. (This is a demonstration flow — see the note below.)</p>
+
+  <h3>Split payment</h3>
+  <p>Add more than one tender — for example part Cash and part Card — until the total is covered. The receipt lists every tender and the change given.</p>
+
+  <div class="box warn"><div class="bt">Card payments are simulated</div>The card flow does <strong>not</strong> charge a real card. To take real card payments you need a real payment terminal or an online payment provider, which requires a back-end (server). Ask your developer if you want this added.</div>
+</section>
+
+<!-- ====================== 8. RECEIPTS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 8</div>
+  <h2 class="h">8 · Receipts</h2>
+  <p class="lead">Every completed sale produces a branded, printable receipt showing your logo, the items (with add-ons, preferences and discounts), tax, the tender(s), change and any refunds.</p>
+
+  <figure><img src="img/05-receipt.jpg" alt="Receipt"><figcaption>A branded receipt. Use <strong>Print</strong> to send it to a printer or save it as a PDF.</figcaption></figure>
+
+  <h3>Printing &amp; reprinting</h3>
+  <ul>
+    <li>When a sale completes, tap <strong>🖨 Print</strong> on the confirmation to print the receipt. In the print dialog you can also choose <strong>"Save as PDF"</strong> to keep a digital copy.</li>
+    <li><strong>Reprint last</strong> is always available in the top bar.</li>
+    <li>To reprint an older sale, find it in <strong>Transaction History</strong> (Chapter 10) and tap the printer icon.</li>
+  </ul>
+</section>
+
+<!-- ====================== 9. PROMOTIONS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 9</div>
+  <h2 class="h">9 · Promotions</h2>
+  <p class="lead">Promotions are rule-driven and date-aware: a campaign switches on and off automatically on its start / end dates, with no action from staff.</p>
+
+  <ul>
+    <li>The default rule is <strong>15% OFF Bánh Mì</strong> — applied to the base price only, excluding the MCQ Special Sizzling Beef and excluding combos.</li>
+    <li>Each promotion shows a status: <span class="pill">Active</span> · <span class="pill">Scheduled</span> · <span class="pill">Expired</span> · <span class="pill">Disabled</span>. Only <strong>Active</strong> rules discount a sale.</li>
+    <li>A cashier-facing <strong>promotions panel &amp; banner</strong> shows what is currently running and until when, so you bill correctly alongside any marketing campaign.</li>
+  </ul>
+  <p>Managers create and edit campaigns (with dates) in <strong>Menu Manager → Promotions</strong> (Chapter 12).</p>
+</section>
+
+<!-- ====================== 10. HISTORY ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 10</div>
+  <h2 class="h">10 · Transaction History, Refunds &amp; Voids</h2>
+  <p class="lead">Open <strong>Transaction History</strong> from the navigation rail to look up any sale across all days — including sales placed at the self-service kiosk.</p>
+
+  <figure><img src="img/06-history.jpg" alt="Transaction history"><figcaption>Transaction History — search, then reprint, refund or void a sale.</figcaption></figure>
+
+  <h3>Looking up a sale</h3>
+  <p>Search by <strong>order number</strong>, <strong>queue number</strong>, table, customer name, amount or time. This is how the counter finds a <strong>kiosk</strong> customer's receipt — ask for their queue number (e.g. <code>0006</code>) and search it.</p>
+
+  <h3>Refunds <span class="pill">Manager</span></h3>
+  <ul>
+    <li><strong>Full or partial (per-item) refunds</strong> with a required reason and a refund method. Partial refunds return the right share of any discount and tax.</li>
+    <li>A <strong>refund voucher</strong> is printed and the sale's status is updated to <em>partial-refund</em> or <em>refunded</em>.</li>
+  </ul>
+
+  <h3>Voids <span class="pill">Manager</span></h3>
+  <p>A <strong>Void</strong> cancels a sale made in error and removes it from all takings (use a refund, not a void, when money was genuinely returned). Every refund and void is written to the audit trail.</p>
+</section>
+
+<!-- ====================== 11. DASHBOARD ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 11</div>
+  <h2 class="h">11 · Dashboard &amp; Reports <span class="pill">Manager</span></h2>
+  <p class="lead">The Dashboard turns your sales into figures you can act on.</p>
+
+  <figure><img src="img/07-dashboard.jpg" alt="Dashboard"><figcaption>The Dashboard — KPIs across the top, an hourly heatmap, and top sellers.</figcaption></figure>
+
+  <h3>What it shows</h3>
+  <ul>
+    <li><strong>KPIs</strong> — net sales, average order, refunds, discounts, tax collected, and dine-in vs take-away counts.</li>
+    <li><strong>Hourly sales heatmap</strong>, sales by category, payment mix and <strong>top sellers</strong>.</li>
+    <li><strong>Any date range</strong> plus quick ranges (Today, 7 days, 30 days, This month, All time) and a category filter.</li>
+  </ul>
+
+  <h3>Exports &amp; the till reading</h3>
+  <ul>
+    <li>Export the current report to <strong>PDF</strong> or <strong>Excel</strong>.</li>
+    <li><strong>Till Reading</strong> gives an <strong>X</strong> reading (a peek during the shift) or a <strong>Z</strong> reading (ring off the day) — the Z reading requires a Manager PIN.</li>
+  </ul>
+</section>
+
+<!-- ====================== 12. MENU MANAGER ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 12</div>
+  <h2 class="h">12 · Menu Manager <span class="pill">Manager</span></h2>
+  <p class="lead">Menu Manager has three tabs for everything about your products and pricing.</p>
+
+  <figure><img src="img/08-menu-manager.jpg" alt="Menu manager"><figcaption>Menu Manager — edit prices inline, enable/disable items, and add or remove products.</figcaption></figure>
+
+  <h3>The three tabs</h3>
+  <ul>
+    <li><strong>Menu Items</strong> — change a price by typing the new number (it saves when you tap away), enable / disable an item (a disabled item greys out and can't be sold), and add, edit or delete products. Flags include <em>no-discount</em> and <em>take-away only</em>.</li>
+    <li><strong>Add-ons &amp; Notes</strong> — full control of the modifier groups and options that power the Customise sheet, including their prices.</li>
+    <li><strong>Promotions</strong> — create and edit campaigns with start / end dates (Chapter 9).</li>
+  </ul>
+  <div class="box tip"><div class="bt">Sold out?</div>Disable the item in <strong>Menu Items</strong>. It immediately greys out on the register and the kiosk and can't be added.</div>
+</section>
+
+<!-- ====================== 13. SETTINGS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 13</div>
+  <h2 class="h">13 · Settings <span class="pill">Manager</span></h2>
+
+  <figure><img src="img/09-settings.jpg" alt="Settings"><figcaption>Settings — store details, tax, staff accounts and data backup all live here.</figcaption></figure>
+
+  <h3>What you can set</h3>
+  <ul>
+    <li><strong>Store details</strong> — name, tagline, address, phone, ABN, and a <strong>logo upload</strong> (shown on screen and on printed receipts).</li>
+    <li><strong>Money</strong> — currency symbol, tax rate &amp; label (default <code>GST 10%</code>), a tax-inclusive toggle, and optional cash rounding.</li>
+    <li><strong>Receipt footer</strong> — your thank-you message.</li>
+    <li><strong>Staff accounts</strong> — add or remove staff, set each PIN and role (Manager or Cashier). <em>This is where you change the default PINs.</em></li>
+    <li><strong>Data</strong> — <strong>Export</strong> a backup file, <strong>Import</strong> it on another device, or <strong>Reset</strong> to the default menu.</li>
+  </ul>
+
+  <div class="box warn"><div class="bt">Reset wipes everything</div><strong>Settings → Reset</strong> erases all orders, settings and menu edits and restores the default menu. It cannot be undone — export a backup first.</div>
+</section>
+
+<!-- ====================== 14. ADMIN HUB ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 14</div>
+  <h2 class="h">14 · The Admin Hub <span class="pill">Manager</span></h2>
+  <p class="lead">The Admin hub is the manager's launch pad. From here you reach the back-office tools and open the guest-facing screens.</p>
+
+  <figure><img src="img/10-admin-hub.jpg" alt="Admin hub"><figcaption>The Admin hub — tiles for reports, history, menu, settings, the audit log, the Customer Display and the Standing Order Tree.</figcaption></figure>
+
+  <ul>
+    <li><strong>Back-office tiles</strong> — Dashboard, Transaction History, Menu Manager, Settings and the Audit log.</li>
+    <li><strong>Customer Display</strong> — opens the second guest-facing screen (Chapter 15).</li>
+    <li><strong>Standing Order Tree</strong> — opens the self-service kiosk (Chapter 16).</li>
+  </ul>
+  <div class="box note"><div class="bt">Audit log</div>The audit log records sensitive events — sales, refunds, voids, discounts, kiosk orders and settings changes — with who and when, and can be exported.</div>
+</section>
+
+<!-- ====================== 15. CUSTOMER DISPLAY ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 15</div>
+  <h2 class="h">15 · Customer Display (Second Screen)</h2>
+  <p class="lead">The Customer Display is a guest-facing screen for the counter — point a second monitor or tablet at the customer and it mirrors their order live as you ring it up.</p>
+
+  <figure><img src="img/11-customer-display.jpg" alt="Customer display"><figcaption>The Customer Display shows the live order, the total, and rotating food videos; a thank-you appears when the sale completes.</figcaption></figure>
+
+  <ul>
+    <li>It updates in real time as items are added at the till (on the same device / browser).</li>
+    <li>Between orders it plays appetising food <strong>videos</strong> and shows your branding.</li>
+    <li>Open it from the <strong>Admin hub</strong>; close it with the <strong>✕</strong> in the corner.</li>
+  </ul>
+</section>
+
+<!-- ====================== 16. KIOSK ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 16</div>
+  <h2 class="h">16 · Standing Order Tree — Self-Service Kiosk</h2>
+  <p class="lead">The Standing Order Tree lets customers order by themselves on a standing touchscreen. It is opened by a manager from the Admin hub and runs full-screen.</p>
+
+  <h3>16.1 · Attract screen</h3>
+  <p>When idle, the kiosk plays a full-screen food video with a bold, colour-cycling <strong>"Tap anywhere to start your order"</strong> prompt. Tapping anywhere begins an order.</p>
+  <figure><img src="img/12-kiosk-attract.jpg" alt="Kiosk attract screen"><figcaption>The attract loop — a prominent video invites the customer to tap and start.</figcaption></figure>
+
+  <h3>16.2 · Home &amp; language</h3>
+  <p>The home screen greets the customer, shows what's popular, and offers a clear <strong>EN / VI</strong> language switch in the top bar (the whole kiosk interface translates). Customers can also scan their membership here to earn points.</p>
+  <figure><img src="img/13-kiosk-home.jpg" alt="Kiosk home"><figcaption>Home — "Start your order", a popular row, and the EN/VI language toggle (top right).</figcaption></figure>
+
+  <h3>16.3 · The menu</h3>
+  <p>A category rail (on the left in landscape, a strip on top in portrait), quick filter chips (<strong>Popular · Veg · Spicy · New</strong>), and a grid of dishes. Key touches that reduce tapping for a standing customer:</p>
+  <ul>
+    <li><strong>Add right on the card</strong> — once a dish is added, the card itself becomes a − / + stepper with a quantity badge, so quantity is adjusted in place.</li>
+    <li><strong>Tap a card</strong> to open the full item sheet (photo, options, note).</li>
+    <li><strong>A bottom bar is always visible</strong> showing the basket and total — one tap goes to checkout.</li>
+  </ul>
+  <figure><img src="img/14-kiosk-menu.jpg" alt="Kiosk menu"><figcaption>The kiosk menu — category rail, filter chips, dish cards with "+ Add", and the persistent checkout bar at the bottom.</figcaption></figure>
+
+  <h3>16.4 · The item sheet</h3>
+  <p>Tapping a dish opens a bottom-sheet with a large photo, paid add-ons, free preferences, a kitchen note and a quantity selector — the same choices a cashier has. Combos let the customer pick their own fillings here, rather than "at the counter".</p>
+  <figure><img src="img/15-kiosk-sheet.jpg" alt="Kiosk item sheet"><figcaption>The item detail / customise sheet — add-ons, preferences, a note and quantity.</figcaption></figure>
+
+  <h3>16.5 · Checkout</h3>
+  <p>The checkout uses two columns: the editable order on the left (adjust quantity or remove), and a sticky summary on the right. It also shows a <strong>progress bar</strong> (Choose → Review → Pay → Queue), a <strong>Dine-in / Take-away</strong> choice, a full money breakdown (subtotal · promo · tax · total), an inline <strong>membership</strong> box, and an <strong>"Add a drink or dessert?"</strong> upsell.</p>
+  <figure><img src="img/16-kiosk-checkout.jpg" alt="Kiosk checkout"><figcaption>Kiosk checkout — editable order, progress steps, money breakdown, membership and upsell.</figcaption></figure>
+
+  <h3>16.6 · Payment &amp; the queue number</h3>
+  <p>The kiosk takes <strong>card payment</strong> only (cash customers are asked to order at the counter). After paying, the customer sees a big <strong>queue number</strong> with two buttons — <strong>🖨 Print receipt</strong> and <strong>⬇ Save PDF</strong> — and any loyalty points earned.</p>
+  <figure><img src="img/17-kiosk-done.jpg" alt="Kiosk confirmation"><figcaption>Order placed — the queue number, plus Print / Save-PDF receipt buttons.</figcaption></figure>
+
+  <h3>16.7 · Kiosk orders join the cashier's history</h3>
+  <div class="box note"><div class="bt">Important</div>Every kiosk sale is recorded in the <strong>same Transaction History</strong> the cashier uses (listed with cashier "Order Kiosk"). The counter can look it up by the customer's <strong>queue number</strong>, order id, amount or — if a member ordered — their name, then reprint or refund it like any other sale.</div>
+
+  <h3>16.8 · Idle reset &amp; exiting</h3>
+  <ul>
+    <li>If a customer walks away mid-order, the kiosk automatically returns to the attract screen so no abandoned order lingers.</li>
+    <li>A manager exits the kiosk with the small <strong>✕</strong> in the corner.</li>
+  </ul>
+</section>
+
+<!-- ====================== 17. LOYALTY ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 17</div>
+  <h2 class="h">17 · Loyalty &amp; Membership</h2>
+  <p class="lead">Customers can earn points on every order — at the counter or the kiosk.</p>
+  <ul>
+    <li>Attach a member by scanning / entering their <strong>card code</strong> or <strong>phone number</strong>.</li>
+    <li>Points are earned at <strong>1 point per $1</strong> spent (configurable).</li>
+    <li>Demo membership cards are provided for testing:</li>
+  </ul>
+  <table>
+    <tr><th>Card code</th><th>Name</th><th>Points</th></tr>
+    <tr><td><code>MCQ1001</code></td><td>Linh Nguyen</td><td>240</td></tr>
+    <tr><td><code>MCQ1002</code></td><td>Anh Tran</td><td>80</td></tr>
+    <tr><td><code>MCQ1003</code></td><td>Minh Le</td><td>515</td></tr>
+  </table>
+  <div class="box note"><div class="bt">One device at a time</div>Because data is stored on each device (Chapter 18), points earned on one tablet are not shared with another tablet unless they are the same browser. A shared, multi-device loyalty programme needs a back-end.</div>
+</section>
+
+<!-- ====================== 18. DATA ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 18</div>
+  <h2 class="h">18 · Data, Storage &amp; Backup</h2>
+  <p class="lead">All data — your menu, prices, orders, members and settings — is stored by the browser on the device itself (in "local storage"). It survives refreshes and restarts.</p>
+
+  <h3>What this means in practice</h3>
+  <ul>
+    <li><strong>Per device.</strong> Each tablet / browser keeps its own copy. A register on one tablet and a kiosk on another do <strong>not</strong> automatically share data unless they are the <em>same</em> browser on the <em>same</em> device.</li>
+    <li><strong>Back up regularly.</strong> Use <strong>Settings → Export</strong> to save a backup file; <strong>Import</strong> restores it (also handy to copy your setup to another device).</li>
+    <li><strong>Clearing the browser cache erases the data.</strong> Keep a recent export.</li>
+  </ul>
+
+  <div class="box warn"><div class="bt">Want one shared database across devices?</div>Live sharing between a kiosk and several tills (one order list, one queue number, one loyalty balance) requires a real back-end (a server and database). That is a larger project — speak to your developer if you need it.</div>
+</section>
+
+<!-- ====================== 19. TIPS ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 19</div>
+  <h2 class="h">19 · Keyboard, Touch &amp; Tips</h2>
+  <ul>
+    <li><strong>Built for touch</strong> — big buttons throughout; an on-screen keyboard appears for text fields on touch devices.</li>
+    <li><strong>Esc</strong> closes any open dialog.</li>
+    <li><strong>Fully responsive</strong> — the layout adapts to portrait (standing kiosk) and landscape (counter) screens.</li>
+    <li><strong>Full-screen</strong> — run the browser full-screen on tablets for a clean, kiosk-like look.</li>
+    <li><strong>Reprint last</strong> in the top bar is the fastest way to re-issue the most recent receipt.</li>
+  </ul>
+</section>
+
+<!-- ====================== 20. TROUBLESHOOTING ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 20</div>
+  <h2 class="h">20 · Troubleshooting &amp; FAQ</h2>
+
+  <h4>Videos or images load slowly / stutter</h4>
+  <p>This is usually the hosting, not the app. If you host on a basic plan, make sure the images and videos are served directly by the web server (a "static files" mapping) rather than through application code. For the smoothest media, host the site on a CDN-backed static host (e.g. GitHub Pages or Cloudflare Pages).</p>
+
+  <h4>I forgot a PIN / locked myself out</h4>
+  <p>Another Manager can reset PINs in <strong>Settings → Staff</strong>. If no Manager can log in, a full <strong>Reset</strong> restores the defaults (Manager <code>1234</code>) but erases all data — so keep a backup export.</p>
+
+  <h4>A kiosk customer needs their receipt</h4>
+  <p>Ask for their <strong>queue number</strong> and search it in <strong>Transaction History</strong>, then reprint.</p>
+
+  <h4>An item shouldn't be on sale</h4>
+  <p>Disable it in <strong>Menu Manager → Menu Items</strong>; it greys out everywhere instantly.</p>
+
+  <h4>The card payment didn't charge the customer's card</h4>
+  <p>Correct — the card flow is a <strong>simulation</strong>. Real card processing needs a payment terminal or online provider (and a back-end).</p>
+
+  <h4>My changes to the code aren't showing online</h4>
+  <p>After updating the hosted files, reload the web app on the host and refresh the browser. A hard refresh (clearing cache) ensures the newest version loads.</p>
+</section>
+
+<!-- ====================== APPENDIX ====================== -->
+<section class="chapter">
+  <div class="kicker">Appendix</div>
+  <h2 class="h">A · Quick Reference</h2>
+
+  <h3>Default logins</h3>
+  <table>
+    <tr><th>Account</th><th>PIN</th><th>Role</th></tr>
+    <tr><td>Manager</td><td><code>1234</code></td><td>Admin — full access</td></tr>
+    <tr><td>Cashier 1</td><td><code>1111</code></td><td>Cashier — register</td></tr>
+    <tr><td>Cashier 2</td><td><code>2222</code></td><td>Cashier — register</td></tr>
+  </table>
+  <p style="color:var(--red);font-weight:700;">Change these in Settings → Staff before going live.</p>
+
+  <h3>How the total is built</h3>
+  <ol>
+    <li><strong>Unit price</strong> = base item price + paid add-ons.</li>
+    <li><strong>Subtotal</strong> = unit price × quantity, at full price.</li>
+    <li><strong>Promotion</strong> = % off each eligible line (base price only; never on paid add-ons; only Active promos apply).</li>
+    <li><strong>Discount</strong> = optional manual discount, applied after the promotion.</li>
+    <li><strong>Tax (GST)</strong> = inclusive (already in the price) or exclusive (added on top), per Settings.</li>
+    <li><strong>Cash rounding</strong> = optional, only when the whole sale is paid in cash.</li>
+  </ol>
+
+  <h3>Default tax &amp; currency</h3>
+  <p>Currency <code>$</code> · <code>GST 10%</code>, tax-inclusive · loyalty <code>1 point / $1</code>. All editable in Settings.</p>
+
+  <div class="box note" style="margin-top:24px;"><div class="bt">End of guide</div>MCQ Café — Point of Sale System · <em>Xin cảm ơn quý khách</em> 🌸</div>
+</section>
+
+</body>
+</html>
