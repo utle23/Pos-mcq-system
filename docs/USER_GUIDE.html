@@ -13,7 +13,7 @@
   }
   *{box-sizing:border-box;}
   html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  body{margin:0;font-family:var(--sans);color:var(--ink);font-size:10.2pt;line-height:1.5;}
+  body{margin:0;font-family:var(--sans);color:var(--ink);font-size:10.8pt;line-height:1.62;}
   h1,h2,h3,h4{font-family:var(--serif);color:var(--ink);line-height:1.18;}
   p{margin:0 0 9px;}
   a{color:var(--gold3);}
@@ -23,8 +23,7 @@
   strong{color:var(--ink);}
 
   /* ---- page flow ---- */
-  .chapter{margin-top:15px;}
-  .chapter:first-of-type{margin-top:0;}
+  .chapter{page-break-before:always;}
   .toc{page-break-after:always;}
   h2.h,h3,h4{page-break-after:avoid;}
   .avoid{page-break-inside:avoid;}
@@ -45,13 +44,13 @@
   /* ---- headings ---- */
   h2.h{font-size:23pt;font-weight:800;margin:0 0 4px;padding-bottom:8px;border-bottom:3px solid var(--gold);}
   .kicker{color:var(--gold2);font-weight:800;letter-spacing:2px;text-transform:uppercase;font-size:8.5pt;margin-bottom:6px;}
-  h3{font-size:13.5pt;font-weight:700;margin:13px 0 5px;color:var(--ink);}
+  h3{font-size:14pt;font-weight:700;margin:20px 0 7px;color:var(--ink);}
   h4{font-size:11.5pt;font-weight:700;margin:14px 0 4px;color:var(--gold3);}
 
   /* ---- figures ---- */
-  figure{margin:11px 0 5px;page-break-inside:avoid;}
-  figure img{width:52%;max-width:99mm;border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 22px -12px rgba(0,0,0,.35);display:block;margin:0 auto;}
-  figcaption{font-size:8.5pt;color:var(--muted);margin-top:5px;text-align:center;font-style:italic;}
+  figure{margin:16px 0 8px;page-break-inside:avoid;}
+  figure img{width:100%;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 26px -12px rgba(0,0,0,.38);display:block;}
+  figcaption{font-size:9pt;color:var(--muted);margin-top:7px;text-align:center;font-style:italic;}
 
   /* ---- callouts ---- */
   .box{border-radius:9px;padding:11px 15px;margin:12px 0;page-break-inside:avoid;border:1px solid var(--line);background:var(--cream);}
@@ -263,6 +262,7 @@
 
   <h3>Combos</h3>
   <p>Combo deals (e.g. <em>Bánh Mì + Drink</em>) open a guided builder: pick the Bánh Mì, then pick the drink or coffee. The combo has a single fixed price and does not stack with the automatic Bánh Mì promotion.</p>
+  <figure><img src="img/18-combo.jpg" alt="Combo builder"><figcaption>The guided combo builder — choose each part of the combo for one fixed price.</figcaption></figure>
 </section>
 
 <!-- ====================== 6. ORDER DETAILS ====================== -->
@@ -461,6 +461,8 @@
   <h3>16.2 · Home &amp; language</h3>
   <p>The home screen greets the customer, shows what's popular, and offers a clear <strong>EN / VI</strong> language switch in the top bar (the whole kiosk interface translates). Customers can also scan their membership here to earn points.</p>
   <figure><img src="img/13-kiosk-home.jpg" alt="Kiosk home"><figcaption>Home — "Start your order", a popular row, and the EN/VI language toggle (top right).</figcaption></figure>
+  <p>Tapping <strong>VI</strong> instantly translates the whole kiosk interface to Vietnamese (the menu chrome, buttons, filters and checkout); dish names stay as entered. Tap <strong>EN</strong> to switch back.</p>
+  <figure><img src="img/19-kiosk-vi.jpg" alt="Kiosk in Vietnamese"><figcaption>The same menu with Vietnamese selected — filters (Tất cả · Bán chạy · Chay · Cay · Mới) and the checkout bar are translated.</figcaption></figure>
 
   <h3>16.3 · The menu</h3>
   <p>A category rail (on the left in landscape, a strip on top in portrait), quick filter chips (<strong>Popular · Veg · Spicy · New</strong>), and a grid of dishes. Key touches that reduce tapping for a standing customer:</p>

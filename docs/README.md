@@ -4,7 +4,7 @@ End-user documentation for the MCQ Café Point of Sale system.
 
 | File | What it is |
 |------|------------|
-| **[MCQ-Cafe-POS-User-Guide.pdf](MCQ-Cafe-POS-User-Guide.pdf)** | The full user guide (20 pages, A4) — read or print this. |
+| **[MCQ-Cafe-POS-User-Guide.pdf](MCQ-Cafe-POS-User-Guide.pdf)** | The full user guide (34 pages, A4, full-size screenshots) — read or print this. |
 | `USER_GUIDE.html` | The source of the guide. Open in a browser and use **Print → Save as PDF** to regenerate the PDF. |
 | `img/` | The screenshots used in the guide. |
 
