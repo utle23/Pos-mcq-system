@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCQ Café POS — Technical Handover &amp; Developer Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f1a15; --ink2:#50473d; --muted:#857a68;
+    --gold:#c79a3f; --gold2:#a87e28; --gold3:#8a661d; --goldsoft:#f4e9cd;
+    --line:#e7ddca; --cream:#fcf7ee; --cream2:#f8f1e2; --green:#267350; --red:#9b2226; --blue:#1f5d8c;
+    --serif:'Playfair Display',Georgia,serif; --sans:'Inter',-apple-system,Segoe UI,sans-serif;
+    --mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  body{margin:0;font-family:var(--sans);color:var(--ink);font-size:10.4pt;line-height:1.6;}
+  h1,h2,h3,h4{font-family:var(--serif);color:var(--ink);line-height:1.18;}
+  p{margin:0 0 9px;}
+  a{color:var(--gold3);}
+  code{font-family:var(--mono);background:var(--cream2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.82em;color:var(--gold3);}
+  ul,ol{margin:0 0 10px;padding-left:20px;}
+  li{margin:3px 0;}
+  strong{color:var(--ink);}
+
+  .chapter{page-break-before:always;}
+  .toc{page-break-after:always;}
+  h2.h,h3,h4{page-break-after:avoid;}
+  .avoid{page-break-inside:avoid;}
+
+  /* cover */
+  .cover{position:relative;height:250mm;display:flex;flex-direction:column;justify-content:center;
+    color:#e9eef3;text-align:center;padding:0 22mm;overflow:hidden;border-radius:2px;
+    background:radial-gradient(120% 80% at 50% 0%,#243b4d 0%,#16212b 55%,#0e151c 100%);page-break-after:always;}
+  .cover .top{position:absolute;top:14mm;left:0;right:0;letter-spacing:7px;text-transform:uppercase;color:#7fb0d6;font-size:10pt;font-weight:700;}
+  .cover .eyebrow{letter-spacing:6px;text-transform:uppercase;color:var(--gold);font-weight:800;font-size:11pt;margin-bottom:14px;}
+  .cover h1{font-size:40pt;font-weight:800;color:#fff;margin:0 0 8px;text-shadow:0 6px 30px rgba(0,0,0,.5);}
+  .cover .sub{font-size:15pt;color:#c9d6e2;font-family:var(--serif);font-style:italic;margin-bottom:26px;}
+  .cover .rule{width:80px;height:3px;background:var(--gold);margin:0 auto 26px;border-radius:3px;}
+  .cover .tag{display:inline-block;border:1.5px solid rgba(127,176,214,.5);border-radius:30px;padding:8px 20px;color:#9cc2de;font-weight:700;font-size:10.5pt;margin:5px;}
+  .cover .foot{position:absolute;left:0;right:0;bottom:22mm;color:#9fb3c4;font-size:9.6pt;}
+  .cover .foot b{color:#e9eef3;}
+  .cover .conf{position:absolute;left:0;right:0;bottom:14mm;color:#647c91;font-size:8.4pt;letter-spacing:2px;text-transform:uppercase;}
+
+  /* headings */
+  h2.h{font-size:22pt;font-weight:800;margin:0 0 4px;padding-bottom:8px;border-bottom:3px solid var(--gold);}
+  .kicker{color:var(--gold2);font-weight:800;letter-spacing:2px;text-transform:uppercase;font-size:8.5pt;margin-bottom:6px;}
+  h3{font-size:13.5pt;font-weight:700;margin:18px 0 6px;color:var(--ink);}
+  h4{font-size:11pt;font-weight:700;margin:13px 0 4px;color:var(--gold3);}
+
+  .lead{font-size:11.4pt;color:var(--ink2);margin-bottom:12px;}
+
+  /* code */
+  pre{background:#1c2530;color:#dfe7ef;border-radius:9px;padding:12px 14px;margin:11px 0;
+    font-family:var(--mono);font-size:8.2pt;line-height:1.5;page-break-inside:avoid;border:1px solid #2c3a48;
+    white-space:pre-wrap;word-break:break-word;}
+  pre .c{color:#7f93a6;font-style:italic;}
+  pre .k{color:#e0a94a;}
+  pre .s{color:#9ed29e;}
+  pre .f{color:#86b9e6;}
+  .filelabel{font-family:var(--mono);font-size:8pt;color:var(--gold3);background:var(--cream2);border:1px solid var(--line);
+    border-bottom:none;border-radius:7px 7px 0 0;padding:3px 10px;display:inline-block;margin:11px 0 -11px;font-weight:600;}
+
+  /* callouts */
+  .box{border-radius:9px;padding:11px 15px;margin:12px 0;page-break-inside:avoid;border:1px solid var(--line);background:var(--cream);}
+  .box .bt{font-weight:800;font-size:9.2pt;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+  .tip{background:#eef7f0;border-color:#bfe3cd;} .tip .bt{color:var(--green);}
+  .warn{background:#fdf3f2;border-color:#f0cdca;} .warn .bt{color:var(--red);}
+  .note{background:var(--goldsoft);border-color:var(--gold);} .note .bt{color:var(--gold3);}
+  .info{background:#eef4fa;border-color:#c2d8ea;} .info .bt{color:var(--blue);}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:9.2pt;page-break-inside:avoid;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:var(--ink);color:#f6e8d2;font-weight:700;}
+  tr:nth-child(even) td{background:var(--cream);}
+  td code{font-size:.95em;}
+
+  .pill{display:inline-block;background:var(--goldsoft);color:var(--gold3);border:1px solid var(--gold);border-radius:20px;padding:1px 9px;font-size:8.4pt;font-weight:700;}
+
+  /* architecture diagram */
+  .arch{margin:16px 0;page-break-inside:avoid;}
+  .layer{border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--cream);}
+  .layer .lh{font-weight:800;font-size:9pt;text-transform:uppercase;letter-spacing:1px;color:var(--gold3);margin-bottom:7px;}
+  .row{display:flex;gap:8px;flex-wrap:wrap;}
+  .node{flex:1 1 0;min-width:120px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px 10px;font-size:8.8pt;}
+  .node b{display:block;font-size:9.4pt;margin-bottom:2px;color:var(--ink);}
+  .node .mono{font-family:var(--mono);font-size:7.6pt;color:var(--muted);}
+  .arr{text-align:center;color:var(--gold2);font-size:13pt;margin:-2px 0;}
+
+  .toc h2{border:none;}
+  .toc ol{list-style:none;padding:0;font-size:10.6pt;}
+  .toc>ol>li{margin:6px 0;font-weight:700;border-bottom:1px dotted var(--line);padding-bottom:5px;}
+  .toc .num{display:inline-block;width:26px;color:var(--gold2);}
+  .toc ul{list-style:none;padding-left:26px;margin:3px 0;font-weight:400;color:var(--ink2);font-size:9.4pt;}
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<section class="cover">
+  <div class="top">Internal Engineering Document</div>
+  <div class="eyebrow">Point of Sale System</div>
+  <h1>MCQ Café POS</h1>
+  <div class="sub">Technical Handover &amp; Developer Guide</div>
+  <div class="rule"></div>
+  <div>
+    <span class="tag">Architecture</span>
+    <span class="tag">Front-End</span>
+    <span class="tag">Data &amp; Storage</span>
+    <span class="tag">Testing</span>
+    <span class="tag">Deployment</span>
+  </div>
+  <div class="foot">
+    Prepared for the IT / Engineering team &nbsp;·&nbsp; Vietnamese Street Kitchen POS<br>
+    <b>Code version 40</b> &nbsp;·&nbsp; 11 June 2026 &nbsp;·&nbsp; ~7,300 lines, zero runtime dependencies
+  </div>
+  <div class="conf">Confidential — for internal handover use</div>
+</section>
+
+<!-- ===================== TOC ===================== -->
+<section class="toc">
+  <div class="kicker">Contents</div>
+  <h2 class="h">Table of Contents</h2>
+  <ol>
+    <li><span class="num">1</span> Executive Summary &amp; System Overview</li>
+    <li><span class="num">2</span> Architecture at a Glance</li>
+    <li><span class="num">3</span> Technology Stack &amp; Design Methodology</li>
+    <li><span class="num">4</span> Repository &amp; File Structure</li>
+    <li><span class="num">5</span> The Data Layer &amp; "Database"
+      <ul><li>store.js · localStorage · IndexedDB · schema · migrations</li></ul></li>
+    <li><span class="num">6</span> State Management &amp; the Rendering Model</li>
+    <li><span class="num">7</span> Core Domain Logic
+      <ul><li>cart · totals &amp; tax · payments · refunds · promotions · queue numbers</li></ul></li>
+    <li><span class="num">8</span> Front-End Screens &amp; Components</li>
+    <li><span class="num">9</span> The Self-Service Kiosk (state machine &amp; i18n)</li>
+    <li><span class="num">10</span> The Media Subsystem (ads, login, customer display)</li>
+    <li><span class="num">11</span> Security &amp; Access Control</li>
+    <li><span class="num">12</span> Testing &amp; Quality Assurance</li>
+    <li><span class="num">13</span> Performance Engineering</li>
+    <li><span class="num">14</span> Build, Deployment &amp; Operations</li>
+    <li><span class="num">15</span> Extending the System (recipes)</li>
+    <li><span class="num">16</span> Known Limitations &amp; Production Roadmap</li>
+    <li><span class="num">A</span> Appendix — Store API, Storage Schema &amp; Glossary</li>
+  </ol>
+</section>
+
+<!-- ===================== 1 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 1</div>
+  <h2 class="h">1 · Executive Summary &amp; System Overview</h2>
+  <p class="lead">MCQ Café POS is a complete, two-faced point-of-sale system — a cashier register and a self-service kiosk — that runs entirely inside a web browser with <strong>no server-side application logic and no build step</strong>. It is written in framework-free ("vanilla") HTML, CSS and JavaScript.</p>
+
+  <p>The product serves a single Vietnamese street-food café. One menu, one price book and one sales history are shared between two front-ends:</p>
+  <ul>
+    <li><strong>The Register</strong> — staff till: ordering, customisation, split payments, receipts, refunds/voids, reporting, menu &amp; settings administration.</li>
+    <li><strong>The Standing Order Tree</strong> — a customer-facing self-order kiosk: attract loop, bilingual (EN/VI) menu, upsell, loyalty and queue tickets. Kiosk sales drop into the same history the cashier reads.</li>
+  </ul>
+
+  <h3>At a glance</h3>
+  <table>
+    <tr><th style="width:34%">Property</th><th>Value</th></tr>
+    <tr><td>Languages</td><td>HTML5, CSS3, ES2017+ JavaScript</td></tr>
+    <tr><td>Frameworks / build tools</td><td><strong>None.</strong> No React/Vue, no bundler, no transpiler, no npm runtime dependency</td></tr>
+    <tr><td>Runtime dependencies</td><td>Google Fonts (CDN, optional) — everything else is local</td></tr>
+    <tr><td>Persistence</td><td><code>localStorage</code> (business data) + <code>IndexedDB</code> (uploaded media blobs)</td></tr>
+    <tr><td>Source size</td><td>~7,300 lines across 4 JS files, 1 stylesheet, 1 HTML shell</td></tr>
+    <tr><td>Back-end</td><td>None required. Optional static-file host (e.g. PythonAnywhere/Flask) only serves the files</td></tr>
+    <tr><td>Browsers</td><td>Chrome / Edge (recommended), Safari, Firefox — desktop &amp; touch</td></tr>
+  </table>
+
+  <div class="box info"><div class="bt">Why "no backend"?</div>The app keeps all state on the device. That makes it trivial to host (any static server or even <code>file://</code>), resilient offline, and free of database/operations overhead — at the cost of being single-device. Chapter 16 describes the path to a multi-terminal, server-backed deployment when the business needs it.</div>
+</section>
+
+<!-- ===================== 2 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 2</div>
+  <h2 class="h">2 · Architecture at a Glance</h2>
+  <p class="lead">The system is a thin layered single-page application. Four scripts load in dependency order inside one HTML shell; each owns one concern and exposes a single global object.</p>
+
+  <div class="arch">
+    <div class="layer">
+      <div class="lh">Shell · index.html</div>
+      <div class="row">
+        <div class="node"><b>index.html</b><span class="mono">#view · #modal-root · #print-area · #toast</span> Loads the 4 scripts with a <code>?v=N</code> cache-buster.</div>
+      </div>
+    </div>
+    <div class="arr">▲ renders into / reads</div>
+    <div class="layer">
+      <div class="lh">Presentation · ui.js → window.UI</div>
+      <div class="row">
+        <div class="node"><b>Views</b><span class="mono">login · register · payment · history · dashboard · menu mgr · settings · admin · kiosk · customer display</span></div>
+        <div class="node"><b>Render engine</b><span class="mono">render() · renderDynamic() · surgical refresh · modals · toasts · i18n</span></div>
+      </div>
+    </div>
+    <div class="arr">▲ subscribe(commit) ▼ calls</div>
+    <div class="layer">
+      <div class="lh">Domain &amp; State · store.js → window.Store</div>
+      <div class="row">
+        <div class="node"><b>State + logic</b><span class="mono">cart · orders · totals · payments · refunds · promotions · members · users · audit</span></div>
+        <div class="node"><b>Persistence</b><span class="mono">load() · commit() · persist() → localStorage · migrations</span></div>
+      </div>
+    </div>
+    <div class="arr">▼ reads seed ▼ stores blobs</div>
+    <div class="layer">
+      <div class="lh">Data · data.js → window.MCQ_DATA &nbsp;·&nbsp; media.js → window.Media</div>
+      <div class="row">
+        <div class="node"><b>Seed dataset</b><span class="mono">categories · ~70 menu items · modifier groups · promotions · members · default config</span></div>
+        <div class="node"><b>Media store</b><span class="mono">IndexedDB "mcq-media" · ad / login / customer slots · object-URL cache</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Load order &amp; globals</h3>
+  <p>Scripts load synchronously, bottom of <code>&lt;body&gt;</code>, in strict dependency order. Each is an IIFE that attaches exactly one global:</p>
+  <div class="filelabel">index.html</div>
+<pre>&lt;script src="assets/js/data.js?v=40"&gt;&lt;/script&gt;   <span class="c">// window.MCQ_DATA</span>
+&lt;script src="assets/js/store.js?v=40"&gt;&lt;/script&gt;  <span class="c">// window.Store  (reads MCQ_DATA)</span>
+&lt;script src="assets/js/media.js?v=40"&gt;&lt;/script&gt;  <span class="c">// window.Media  (IndexedDB)</span>
+&lt;script src="assets/js/ui.js?v=40"&gt;&lt;/script&gt;     <span class="c">// window.UI    (reads Store + Media)</span></pre>
+
+  <table>
+    <tr><th>Global</th><th>File</th><th>Responsibility</th></tr>
+    <tr><td><code>MCQ_DATA</code></td><td>data.js</td><td>Immutable seed dataset (menu, categories, promotions, members, default config)</td></tr>
+    <tr><td><code>Store</code> / <code>S</code></td><td>store.js</td><td>The "model": all business state, logic and persistence. Framework-agnostic.</td></tr>
+    <tr><td><code>Media</code> / <code>M</code></td><td>media.js</td><td>IndexedDB-backed store for admin-uploaded images/videos + an object-URL cache</td></tr>
+    <tr><td><code>UI</code></td><td>ui.js</td><td>All rendering and event handlers. Every <code>onclick</code> in markup calls <code>UI.*</code>.</td></tr>
+  </table>
+  <div class="box note"><div class="bt">One-way dependencies</div><code>data.js → store.js → ui.js</code>, plus <code>media.js → ui.js</code>. The model (Store) never imports the view (UI). This keeps the domain logic testable in isolation (Chapter 12).</div>
+</section>
+
+<!-- ===================== 3 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 3</div>
+  <h2 class="h">3 · Technology Stack &amp; Design Methodology</h2>
+  <p class="lead">The guiding principle is <strong>radical simplicity and longevity</strong>: a system any developer can read end-to-end, that has no dependency tree to rot, and that will still run unchanged in a browser ten years from now.</p>
+
+  <h3>Why framework-free?</h3>
+  <ul>
+    <li><strong>Zero build / zero install.</strong> Edit a file, refresh the browser. No node_modules, no webpack, no version drift.</li>
+    <li><strong>No supply-chain surface.</strong> Nothing to <code>npm audit</code>; no transitive packages to patch.</li>
+    <li><strong>Full control of performance.</strong> Rendering is explicit, so hot paths (cart, kiosk) update surgically without a virtual-DOM diff (Chapter 13).</li>
+    <li><strong>Longevity.</strong> The platform <em>is</em> the standard library — DOM, <code>localStorage</code>, <code>IndexedDB</code>, <code>&lt;video&gt;</code>.</li>
+  </ul>
+
+  <h3>Patterns &amp; methods used</h3>
+  <table>
+    <tr><th style="width:26%">Pattern</th><th>Where &amp; why</th></tr>
+    <tr><td><strong>Module pattern (IIFE)</strong></td><td>Every file is <code>(function(global){ … })(window)</code> — private scope, one explicit export. Replaces ES modules without a bundler.</td></tr>
+    <tr><td><strong>Single source of truth</strong></td><td>One <code>state</code> object in store.js holds everything; the UI is a pure function of it.</td></tr>
+    <tr><td><strong>Observer / pub-sub</strong></td><td><code>Store.subscribe(fn)</code> + <code>commit()</code>. Any mutation calls <code>commit()</code>, which persists and notifies the UI to re-render.</td></tr>
+    <tr><td><strong>Declarative views, imperative patches</strong></td><td>Views are template-string render functions; high-frequency updates patch only the changed sub-tree.</td></tr>
+    <tr><td><strong>Finite state machine</strong></td><td>The kiosk (<code>attract → home → menu → member → pay → done</code>) and the payment flow are explicit stages.</td></tr>
+    <tr><td><strong>Schema versioning &amp; migration</strong></td><td><code>seedVersion</code> on the config drives forward-migration of persisted data (Chapter 5).</td></tr>
+    <tr><td><strong>Graceful degradation</strong></td><td>Persistence, media storage and autoplay all wrapped in <code>try/catch</code> and feature checks so a blocked API never breaks the app.</td></tr>
+  </table>
+
+  <h3>Domain modelling method</h3>
+  <p>The POS domain is modelled as plain data with pure transforms. An <strong>order</strong> is a list of <strong>lines</strong>; a line references a menu item plus chosen add-ons, modifiers, note and quantity. Pricing is a pure function <code>computeTotals(cart)</code> — no side effects, fully unit-testable. Payment, refund and promotion rules are likewise expressed as data-in/data-out functions over that model.</p>
+  <div class="box tip"><div class="bt">Convention</div>Money is integer-safe via <code>round2()</code>; identifiers are short slugs (<code>banh-mi</code>, <code>u-admin</code>); time buckets use <code>dayKey(ts)</code> for day-grouped reports.</div>
+</section>
+
+<!-- ===================== 4 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 4</div>
+  <h2 class="h">4 · Repository &amp; File Structure</h2>
+  <p class="lead">The repository is intentionally flat. Source is under <code>assets/</code>; documentation under <code>docs/</code>.</p>
+
+  <div class="filelabel">repository tree</div>
+<pre>Pos-mcq-system/
+├─ index.html                 <span class="c">// app shell — loads the 4 scripts (~21 lines)</span>
+├─ assets/
+│  ├─ js/
+│  │  ├─ data.js              <span class="c">// seed dataset → MCQ_DATA        (~278 lines)</span>
+│  │  ├─ store.js             <span class="c">// model: state, logic, storage  (~1,153 lines)</span>
+│  │  ├─ media.js             <span class="c">// IndexedDB media store          (~129 lines)</span>
+│  │  └─ ui.js                <span class="c">// all views + handlers           (~4,013 lines)</span>
+│  ├─ css/
+│  │  └─ styles.css           <span class="c">// full theme + responsive + print (~1,718 lines)</span>
+│  ├─ images/                 <span class="c">// logo, backgrounds, per-item photos</span>
+│  └─ videos/                 <span class="c">// ad1/ad2 (HD attract) + secondary clips</span>
+└─ docs/
+   ├─ USER_GUIDE.html         <span class="c">// end-user manual (source)</span>
+   ├─ MCQ-Cafe-POS-User-Guide.pdf
+   ├─ TECH_GUIDE.html         <span class="c">// this document (source)</span>
+   ├─ img/                    <span class="c">// guide screenshots</span>
+   └─ README.md</pre>
+
+  <table>
+    <tr><th>File</th><th>Owns</th><th>Key exports / globals</th></tr>
+    <tr><td><code>data.js</code></td><td>Catalogue &amp; defaults</td><td><code>MCQ_DATA.{CATEGORIES, MENU, MODIFIER_GROUPS, PROMOTIONS, MEMBERS, CONFIG}</code></td></tr>
+    <tr><td><code>store.js</code></td><td>Business model</td><td><code>Store.*</code> (see Appendix A) — ~90 functions</td></tr>
+    <tr><td><code>media.js</code></td><td>Uploaded media</td><td><code>Media.{preload, add, remove, clearSlot, ads, login, customer}</code></td></tr>
+    <tr><td><code>ui.js</code></td><td>Everything visual</td><td><code>UI.*</code> — render functions + DOM event handlers</td></tr>
+    <tr><td><code>styles.css</code></td><td>Look &amp; feel</td><td>CSS custom properties, responsive &amp; <code>@media print</code> rules</td></tr>
+  </table>
+</section>
+
+<!-- ===================== 5 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 5</div>
+  <h2 class="h">5 · The Data Layer &amp; "Database"</h2>
+  <p class="lead">There is no SQL database and no server. The persistence tier is two browser storage APIs wrapped by <code>store.js</code> and <code>media.js</code>.</p>
+
+  <h3>5.1 Business data — localStorage</h3>
+  <p>The entire live business state is serialised to a single <code>localStorage</code> key. Reads/writes are wrapped so a blocked storage API (private mode) degrades to in-memory only.</p>
+  <div class="filelabel">store.js</div>
+<pre><span class="k">const</span> KEY = <span class="s">'mcq_pos_state_v1'</span>;
+
+<span class="k">function</span> <span class="f">persist</span>(){ <span class="k">try</span>{ localStorage.setItem(KEY, JSON.stringify(state)); }<span class="k">catch</span>(e){} }
+<span class="k">function</span> <span class="f">commit</span>(){ persist(); emit(); }              <span class="c">// mutate → save → notify UI</span>
+<span class="k">function</span> <span class="f">subscribe</span>(fn){ listeners.add(fn); <span class="k">return</span> () =&gt; listeners.delete(fn); }</pre>
+
+  <p>The persisted object (the "schema") is a single JSON document:</p>
+  <table>
+    <tr><th>Key</th><th>Shape</th><th>Notes</th></tr>
+    <tr><td><code>config</code></td><td>store details, tax, logo, users, flags, <code>seedVersion</code></td><td>Editable in Settings; also holds media flags (Chapter 10)</td></tr>
+    <tr><td><code>menu</code></td><td>array of items (price, availability, category, image)</td><td>Seeded from <code>MCQ_DATA.MENU</code>, then user-editable</td></tr>
+    <tr><td><code>promotions</code></td><td>date-aware discount rules</td><td>Auto activate/expire by date</td></tr>
+    <tr><td><code>cart</code></td><td>the in-progress order (lines, type, discounts)</td><td>The live register order</td></tr>
+    <tr><td><code>orders</code></td><td>completed sales (newest first)</td><td>Shared by counter + kiosk; queried for receipts &amp; refunds</td></tr>
+    <tr><td><code>held</code></td><td>parked tickets</td><td>Recall/void</td></tr>
+    <tr><td><code>auditLog</code></td><td>sensitive-event trail</td><td>Sales, refunds, voids, discounts, settings changes</td></tr>
+    <tr><td><code>credits</code> / <code>tills</code></td><td>goodwill credits, till readings</td><td>Cash management</td></tr>
+    <tr><td><code>live</code></td><td>customer-display channel</td><td>Mirrors the active cart to the second screen</td></tr>
+  </table>
+
+  <h3>5.2 Schema migration</h3>
+  <p>On <code>load()</code>, a stored <code>seedVersion</code> below the current (<code>MCQ_DATA.CONFIG.seedVersion</code>, presently <strong>12</strong>) triggers forward-migration — adopting new default fields without clobbering user edits. This is how the codebase ships breaking dataset changes safely to devices that already hold data.</p>
+  <div class="filelabel">store.js · migrateConfig()</div>
+<pre><span class="k">const</span> savedVer = savedConfig.seedVersion || 1;
+<span class="k">if</span> (savedVer &gt;= (D.CONFIG.seedVersion || 1)) <span class="k">return</span>;   <span class="c">// already current</span>
+<span class="c">// …adopt new defaults only where the user never customised…</span>
+state.config.seedVersion = D.CONFIG.seedVersion;</pre>
+
+  <h3>5.3 Uploaded media — IndexedDB</h3>
+  <p>Images/videos uploaded by an admin are far too large for <code>localStorage</code> (~5&nbsp;MB cap), so <code>media.js</code> stores them as <strong>Blobs in IndexedDB</strong>. Synchronous render code can't await IndexedDB, so the module keeps an in-memory cache of <code>Object URLs</code> built once at boot by <code>preload()</code>.</p>
+  <div class="filelabel">media.js · object store</div>
+<pre>DB <span class="s">"mcq-media"</span> → object store <span class="s">"media"</span> { keyPath:<span class="s">"id"</span>, index:<span class="s">"slot"</span> }
+record = { id, slot, name, type, kind, size, ord, blob, createdAt }
+slots  = <span class="s">"ad"</span> | <span class="s">"login"</span> | <span class="s">"customer"</span>   <span class="c">// each a rotating list</span>
+
+cache  = { ad:[…urls], login:[…urls], customer:[…urls] }  <span class="c">// rebuilt on every add/remove</span></pre>
+  <div class="box info"><div class="bt">Why object URLs</div>Blobs are turned into <code>blob:</code> URLs once and reused, so a <code>&lt;video src&gt;</code> streams straight from memory. Old URLs are <code>revokeObjectURL</code>'d on each rebuild to avoid leaks. See Chapter 10 for the full subsystem.</div>
+</section>
+
+<!-- ===================== 6 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 6</div>
+  <h2 class="h">6 · State Management &amp; the Rendering Model</h2>
+  <p class="lead">The UI is a function of state. A mutation calls <code>Store.commit()</code>; the store persists and emits; the UI re-renders. The art is re-rendering <em>only</em> what changed.</p>
+
+  <h3>The render pipeline</h3>
+  <div class="filelabel">ui.js</div>
+<pre><span class="k">function</span> <span class="f">init</span>(){
+  Store.load();
+  <span class="c">// build #view / #modal-root / #print-area / #toast shells</span>
+  Store.subscribe(renderDynamic);       <span class="c">// re-render on every commit</span>
+  render();
+  <span class="k">if</span> (Media) Media.preload().then(repaintMediaViews);   <span class="c">// swap in uploaded media when ready</span>
+}
+
+<span class="k">function</span> <span class="f">renderDynamic</span>(){
+  <span class="c">// SURGICAL fast-paths — avoid blowing away the whole view:</span>
+  <span class="k">if</span> (ui.view === <span class="s">'register'</span> &amp;&amp; cartEl) <span class="k">return</span> refreshCart();   <span class="c">// only #pos-cart</span>
+  <span class="k">if</span> (ui.view === <span class="s">'backscreen'</span>) <span class="k">return</span> paintBackScreen();    <span class="c">// only the order half</span>
+  <span class="k">if</span> (ui.view === <span class="s">'kiosk'</span>) <span class="k">return</span>;                       <span class="c">// kiosk drives its own paints</span>
+  renderTopbar(); render();                                <span class="c">// otherwise full repaint</span>
+}</pre>
+
+  <h3>Three tiers of update</h3>
+  <table>
+    <tr><th>Tier</th><th>Mechanism</th><th>Used by</th></tr>
+    <tr><td><strong>Full</strong></td><td><code>render()</code> rewrites <code>#view.innerHTML</code> from a template string</td><td>Navigation between views</td></tr>
+    <tr><td><strong>Surgical</strong></td><td>Replace only one sub-element (e.g. <code>#pos-cart</code>, <code>.cust2-order</code>, a kiosk card)</td><td>High-frequency state (cart edits, kiosk +/−)</td></tr>
+    <tr><td><strong>Out-of-band</strong></td><td>Modals in <code>#modal-root</code>; receipts in <code>#print-area</code>; toasts</td><td>Dialogs, printing, transient messages</td></tr>
+  </table>
+
+  <p>For example, adding an item at the register never rebuilds the 70-item menu grid — only the cart panel is re-rendered, preserving its scroll position. On the kiosk, the stepper updates a single card and the bottom bar in place. This is what keeps the touch UI flicker-free (Chapter 13).</p>
+  <div class="box note"><div class="bt">Event wiring</div>There is no event-delegation framework: markup uses inline <code>onclick="UI.fn(args)"</code>. Every handler is therefore an explicit member of the <code>UI</code> export object, which doubles as the public surface for tests.</div>
+</section>
+
+<!-- ===================== 7 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 7</div>
+  <h2 class="h">7 · Core Domain Logic</h2>
+  <p class="lead">All pricing and fulfilment rules live in <code>store.js</code> as pure-ish functions over the data model. This chapter maps the most important ones.</p>
+
+  <h3>Cart &amp; line construction</h3>
+  <p><code>buildLine(item, opts)</code> composes a cart line from a menu item plus chosen add-ons, modifiers, note and quantity. <code>addItem</code>/<code>setQty</code>/<code>incQty</code>/<code>updateLine</code>/<code>removeLine</code> mutate the cart and <code>commit()</code>.</p>
+
+  <h3>Totals &amp; tax</h3>
+  <p><code>computeTotals(cart)</code> is the single pricing authority: it sums lines, applies per-line and order-level discounts, resolves active promotions, computes tax and (optional) cash rounding, and returns a totals object. Being pure, it is the most heavily unit-tested function in the system.</p>
+
+  <h3>Payments</h3>
+  <ul>
+    <li><strong>Split tender</strong> across Cash / Card / Other, each partial amount tracked until the balance is cleared.</li>
+    <li><strong>Cash</strong> keypad with automatic change calculation and optional rounding.</li>
+    <li><strong>Card (EFTPOS)</strong> is a <em>timed simulation</em> — no real processor. Replacing this is the #1 production task (Chapter 16).</li>
+  </ul>
+
+  <h3>Completing, refunding &amp; voiding</h3>
+  <div class="filelabel">store.js — order lifecycle</div>
+<pre>completeOrder(payment)   <span class="c">// cart → orders.unshift(order); assigns daily queue no.; audits; clears cart</span>
+findOrder(id) · searchOrders(q)   <span class="c">// receipt lookup by id / queue / amount / name</span>
+refundOrder(id, lines) · voidOrder(id)
+refundableQty(...) · remainingRefundable(...)   <span class="c">// partial-refund guards</span></pre>
+
+  <h3>Promotions</h3>
+  <p>Promotions are <strong>date-aware</strong>: <code>promotionActiveNow()</code> / <code>promotionStatus()</code> switch rules on and off automatically by date, so seasonal offers need no manual toggling.</p>
+
+  <h3>Shared daily queue number</h3>
+  <div class="box tip"><div class="bt">Key integration detail</div>The counter and the kiosk draw from the <strong>same</strong> daily sequence. A kiosk sale is <code>orders.unshift</code>'d into the very same history list, so the cashier can look it up, reprint its receipt, or refund it — there is no separate "kiosk orders" silo.</div>
+
+  <h3>Loyalty</h3>
+  <p><code>getMembers</code> / <code>findMember</code> / <code>addMemberPoints</code> back a simple points scheme (seed members <code>MCQ1001–1003</code>), surfaced at both the till and the kiosk.</p>
+</section>
+
+<!-- ===================== 8 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 8</div>
+  <h2 class="h">8 · Front-End Screens &amp; Components</h2>
+  <p class="lead">Every screen is a render function in <code>ui.js</code> returning a template string, selected by <code>render()</code> on <code>ui.view</code>.</p>
+  <table>
+    <tr><th>View</th><th>Render fn</th><th>Purpose</th></tr>
+    <tr><td>Login</td><td><code>renderLogin</code></td><td>Account picker → PIN pad; rotating background (Chapter 10)</td></tr>
+    <tr><td>Register</td><td><code>renderPOS</code></td><td>Category grid, search, cart, customise, discounts, hold</td></tr>
+    <tr><td>Payment</td><td>payment modal flow</td><td>Split tender, cash keypad, card simulation</td></tr>
+    <tr><td>History</td><td><code>renderOrders</code></td><td>Search sales, reprint, refund, void</td></tr>
+    <tr><td>Dashboard</td><td><code>renderDashboard</code></td><td>KPIs, category mix, payment mix, PDF/Excel export</td></tr>
+    <tr><td>Menu Manager</td><td><code>renderMenuManager</code></td><td>Prices, availability, add-on groups, promotions</td></tr>
+    <tr><td>Settings</td><td><code>renderSettings</code></td><td>Store details, logo, staff, tax, backup/restore</td></tr>
+    <tr><td>Admin Hub</td><td><code>renderAdminHub</code></td><td>Launcher: back-office tools + the three media managers</td></tr>
+    <tr><td>Customer Display</td><td><code>renderBackScreen</code></td><td>Guest-facing live order over rotating media</td></tr>
+    <tr><td>Kiosk</td><td><code>renderKiosk</code></td><td>The self-service Standing Order Tree (Chapter 9)</td></tr>
+  </table>
+  <h3>Cross-cutting UI services</h3>
+  <ul>
+    <li><strong>Modals</strong> — <code>openModal/closeModal/modalShell/confirmModal</code> render into <code>#modal-root</code>.</li>
+    <li><strong>PIN pad</strong> — surgical: only the four dots update per keypress; the keypad never rebuilds.</li>
+    <li><strong>Printing</strong> — receipts/reports are composed into <code>#print-area</code> and produced via <code>window.print()</code> + <code>@media print</code> CSS (no PDF library).</li>
+    <li><strong>Toasts</strong> — <code>toast(msg)</code> for transient confirmations.</li>
+  </ul>
+</section>
+
+<!-- ===================== 9 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 9</div>
+  <h2 class="h">9 · The Self-Service Kiosk</h2>
+  <p class="lead">The Standing Order Tree is a full-screen state machine with its own cart held in UI state (not the store), an idle auto-reset, and bilingual copy.</p>
+
+  <h3>Stages</h3>
+  <div class="filelabel">ui.js — kiosk FSM</div>
+<pre>attract → home → menu (+cart) → member → pay → done(queue ticket)
+ui.kioskStage drives renderKiosk(); kioskPaint() rewrites #view directly
+armKioskIdle()  <span class="c">// inactivity → wipe cart, return to attract (abandoned-order safety)</span></pre>
+
+  <h3>Internationalisation (EN / VI)</h3>
+  <p>A tiny i18n layer — <code>kt(key)</code> over a <code>KT_DICT</code> dictionary — localises kiosk copy; a header toggle flips <code>ui.kioskLang</code> and repaints.</p>
+
+  <h3>Surgical kiosk updates</h3>
+  <p>Each menu card carries a <code>data-id</code> and an always-present quantity badge. A tap routes through <code>kioskSyncCard(id)</code> + <code>kioskSyncBar()</code> which update just that card and the checkout bar — so <strong>no image ever reloads</strong> and the grid never rebuilds.</p>
+
+  <h3>Attract advertising &amp; neon frame</h3>
+  <p>The attract screen plays the ad playlist (Chapter 10) inside a CSS-only glowing neon frame with hanging lanterns and corner lights. The frame animates <code>opacity</code> only, so it composites cheaply.</p>
+</section>
+
+<!-- ===================== 10 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 10</div>
+  <h2 class="h">10 · The Media Subsystem</h2>
+  <p class="lead">Three admin "media managers" let staff run their own photos/videos on the kiosk ad loop, the login screen and the customer display — with no back-end. This is the newest subsystem; IT should understand it well.</p>
+
+  <h3>Storage model (media.js)</h3>
+  <p>One IndexedDB object store, three logical <strong>slots</strong>, each an ordered list. Uploading appends; the in-memory <code>cache</code> of object URLs is rebuilt after every change so synchronous render code stays simple.</p>
+  <div class="filelabel">media.js — public API</div>
+<pre>Media.preload()                <span class="c">// boot: blobs → object-URL cache</span>
+Media.add(slot, file)          <span class="c">// store a Blob, rebuild cache</span>
+Media.remove(id) · clearSlot(slot)
+Media.ads() · login() · customer()   <span class="c">// synchronous getters → [{id,name,kind,size,url}]</span></pre>
+
+  <h3>Built-in + uploaded, the same logic on all three screens</h3>
+  <p>Each manager presents one unified list:</p>
+  <ul>
+    <li><strong>Built-in defaults</strong> (the clips shipped in <code>assets/videos/</code>) appear as real, <em>removable</em> rows. "Removing" a built-in records its id in a config flag — it is not deleted from disk.</li>
+    <li><strong>Uploads</strong> are appended and stored in IndexedDB.</li>
+    <li>When a screen holds more than one item, items <strong>rotate</strong> — images on a timer, videos on <code>onended</code>.</li>
+    <li>A <strong>Restore</strong> action clears the hidden-defaults flag.</li>
+  </ul>
+  <div class="filelabel">ui.js — the "active list" pattern (ads shown)</div>
+<pre><span class="k">const</span> DEFAULT_ADS = [{ id:<span class="s">'def-ad1'</span>, url:<span class="s">'assets/videos/ad1.mp4?v=2'</span>, builtin:<span class="k">true</span> }, … ];
+
+<span class="k">function</span> <span class="f">activeAds</span>(){
+  <span class="k">const</span> hidden = Store.getConfig().kioskAdsHiddenDefaults || [];
+  <span class="k">return</span> DEFAULT_ADS.filter(d =&gt; !hidden.includes(d.id))
+              .concat(Media.ads());          <span class="c">// built-ins (kept) + uploads</span>
+}</pre>
+
+  <table>
+    <tr><th>Screen</th><th>Slot</th><th>Built-in</th><th>Config flag(s)</th></tr>
+    <tr><td>Kiosk attract</td><td><code>ad</code></td><td>ad1.mp4, ad2.mp4 (HD)</td><td><code>kioskAdsHiddenDefaults</code>, <code>kioskAdsOff</code></td></tr>
+    <tr><td>Login screen</td><td><code>login</code></td><td>3-panel collage</td><td><code>loginHiddenDefault</code>, <code>loginVideoOff</code></td></tr>
+    <tr><td>Customer display</td><td><code>customer</code></td><td>vid-847.mp4</td><td><code>customerHiddenDefault</code></td></tr>
+  </table>
+
+  <div class="box warn"><div class="bt">Operational consequence</div>Media lives in the browser of the device that uploaded it. There is no sync across machines — each terminal manages its own content. A future CMS would centralise this (Chapter 16).</div>
+</section>
+
+<!-- ===================== 11 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 11</div>
+  <h2 class="h">11 · Security &amp; Access Control</h2>
+  <p class="lead">Access control is role- and PIN-based, enforced in the client. It is appropriate for an in-store, single-tenant till — but it is <strong>not</strong> a server-grade security boundary, and the document is explicit about that.</p>
+
+  <h3>Roles &amp; gating</h3>
+  <table>
+    <tr><th>Account</th><th>PIN (default)</th><th>Role</th></tr>
+    <tr><td>Manager</td><td><code>1234</code></td><td>admin</td></tr>
+    <tr><td>Cashier 1</td><td><code>1111</code></td><td>cashier</td></tr>
+    <tr><td>Cashier 2</td><td><code>2222</code></td><td>cashier</td></tr>
+  </table>
+  <ul>
+    <li><code>GATED_VIEWS</code> (admin, dashboard, menu, settings, audit) require a manager; <code>render()</code> bounces a cashier back to the register.</li>
+    <li><code>requireAdmin(cb)</code> unlocks admin features once per shift on a manager PIN; <code>requireAdminAlways(cb)</code> re-prompts every time (e.g. discounts).</li>
+    <li>Transaction History is open to all; only the <em>refund action</em> inside it is gated.</li>
+  </ul>
+
+  <div class="box warn"><div class="bt">Threat model — be honest with stakeholders</div>PINs and data live in the browser. This protects against casual misuse by staff, not a determined attacker with device access (data is readable in DevTools / <code>localStorage</code>). Card payments are simulated. For handling real money and PII at scale, move auth and payments server-side (Chapter 16). <strong>Change the default PINs before going live.</strong></div>
+</section>
+
+<!-- ===================== 12 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 12</div>
+  <h2 class="h">12 · Testing &amp; Quality Assurance</h2>
+  <p class="lead">Because the model is decoupled from the DOM, it is tested two ways: static checks, and headless-browser behavioural smoke tests driving the real <code>UI</code> surface.</p>
+
+  <h3>Static &amp; syntax</h3>
+  <p>Every change is validated with <code>node --check</code> on each JS file (parse-level guarantee) before it is run in a browser.</p>
+
+  <h3>Headless behavioural tests (puppeteer-core + system Chrome)</h3>
+  <p>A real Chrome loads the app from a local static server and exercises features through the public <code>window.UI</code> / <code>window.Media</code> / <code>window.Store</code> globals — the same surface the markup calls. Assertions check DOM outcomes and that the console is error-free.</p>
+  <div class="filelabel">example smoke test (abridged)</div>
+<pre>await page.evaluate(() =&gt; { UI.chooseCashier(<span class="s">'u-admin'</span>); [<span class="s">'1'</span>,<span class="s">'2'</span>,<span class="s">'3'</span>,<span class="s">'4'</span>].forEach(UI.pinKey); });
+await page.evaluate(<span class="k">async</span> () =&gt; { <span class="k">await</span> Media.add(<span class="s">'ad'</span>, file); <span class="k">await</span> Media.preload(); });
+<span class="c">// assert: ad rows rendered, blob URLs, rotation advances, zero console errors</span></pre>
+  <p>Representative coverage already exercised: media add/remove/restore across all three slots, rotation, login PIN entry &amp; the video-pause performance fix, kiosk surgical add/remove, and the customer-display rotation.</p>
+
+  <h3>Mocked-DOM unit tests (Node <code>vm</code>)</h3>
+  <p>Domain functions (<code>computeTotals</code>, order lifecycle) can be loaded into a Node <code>vm</code> with a minimal DOM mock for fast, browser-free assertions.</p>
+  <div class="box tip"><div class="bt">Recommended next step</div>Commit the smoke tests into a <code>test/</code> folder and wire a <code>package.json</code> script + GitHub Action so they run on every push. The harness already exists; it just needs to live in the repo.</div>
+</section>
+
+<!-- ===================== 13 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 13</div>
+  <h2 class="h">13 · Performance Engineering</h2>
+  <p class="lead">On touch hardware, perceived smoothness is everything. The codebase applies a consistent set of techniques to keep frames cheap.</p>
+  <table>
+    <tr><th>Technique</th><th>Where</th></tr>
+    <tr><td><strong>Surgical re-render</strong> — patch the cart / one card, never the grid</td><td>Register cart, kiosk steppers</td></tr>
+    <tr><td><strong>Stable media elements</strong> — keep a playing <code>&lt;video&gt;</code> alive across data updates</td><td>Customer display order repaint</td></tr>
+    <tr><td><strong>Pause background video under modals</strong> — a frosted (backdrop-blur) overlay over a moving video re-blurs every frame; pausing freezes the layer so the compositor caches it</td><td>Fixes login PIN-entry lag — all modals</td></tr>
+    <tr><td><strong>GPU-friendly animation</strong> — animate <code>transform</code>/<code>opacity</code>, not layout; <code>will-change</code> hints; honour <code>prefers-reduced-motion</code></td><td>Neon frame, attract marquee, CTA</td></tr>
+    <tr><td><strong>Media weight discipline</strong> — HD only where it sells (the attract ads); secondary clips re-encoded H.264, audio stripped, <code>+faststart</code> so they stream instantly; <code>poster</code> + <code>preload</code></td><td>assets/videos</td></tr>
+    <tr><td><strong>Cache-busting</strong> — <code>?v=N</code> query bumped on release so clients fetch fresh CSS/JS</td><td>index.html</td></tr>
+  </table>
+  <div class="filelabel">ffmpeg recipe used for secondary clips</div>
+<pre>ffmpeg -i in.mp4 -an \
+  -vf "scale='if(gte(iw,ih),min(1280,iw),-2)':'if(gte(iw,ih),-2,min(1280,ih))'" \
+  -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p -movflags +faststart out.mp4</pre>
+</section>
+
+<!-- ===================== 14 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 14</div>
+  <h2 class="h">14 · Build, Deployment &amp; Operations</h2>
+  <p class="lead">There is nothing to build. "Deploying" means serving the static files; "releasing" means bumping the cache-buster.</p>
+
+  <h3>Local development</h3>
+<pre><span class="c"># any static server from the repo root</span>
+python3 -m http.server 8080      <span class="c"># → http://localhost:8080</span></pre>
+  <p>Edit a file, hard-refresh the browser. No watch process, no compile.</p>
+
+  <h3>Hosting</h3>
+  <ul>
+    <li>Any static host works: PythonAnywhere (Flask serving the folder + a static-files mapping), Netlify, Cloudflare Pages, GitHub Pages, S3+CloudFront, or a plain nginx.</li>
+    <li>For media-heavy smoothness, serve <code>/assets/</code> through a CDN / static mapping rather than the app process.</li>
+  </ul>
+
+  <h3>Release procedure</h3>
+  <ol>
+    <li>Make and test changes (<code>node --check</code> + headless smoke).</li>
+    <li>Bump <code>?v=N</code> on the CSS/JS tags in <code>index.html</code> (current: <strong>40</strong>).</li>
+    <li>Commit, push, redeploy the static files, reload the host.</li>
+    <li>Hard-refresh open devices once.</li>
+  </ol>
+
+  <h3>Backup &amp; restore</h3>
+  <p>Settings → Export/Import writes/reads the whole <code>localStorage</code> document as JSON. This is the operational backup path per device. Uploaded media (IndexedDB) is not included in that JSON and must be re-uploaded if a device is wiped.</p>
+</section>
+
+<!-- ===================== 15 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 15</div>
+  <h2 class="h">15 · Extending the System</h2>
+  <p class="lead">Common change recipes, with the exact touch-points.</p>
+
+  <h4>Add a menu item</h4>
+  <p>Add to <code>MCQ_DATA.MENU</code> in <code>data.js</code> (id, name, price, category, image) and bump <code>seedVersion</code> if existing devices must adopt it — or add it at runtime via Menu Manager. Item photos live in <code>assets/images/items/&lt;id&gt;.jpg</code>.</p>
+
+  <h4>Add a new screen/view</h4>
+  <ol>
+    <li>Write <code>renderXyz()</code> returning a template string.</li>
+    <li>Add a branch in <code>render()</code> on <code>ui.view === 'xyz'</code>.</li>
+    <li>Expose any handlers on the <code>UI</code> export object; reference them as <code>onclick="UI.fn()"</code>.</li>
+    <li>If it is manager-only, add it to <code>GATED_VIEWS</code>.</li>
+  </ol>
+
+  <h4>Add a new media slot</h4>
+  <ol>
+    <li>In <code>media.js</code>: add the slot to <code>cache</code> and the <code>preload</code>/<code>revokeAll</code> branches; add a getter.</li>
+    <li>In <code>ui.js</code>: define defaults + an <code>active&lt;Slot&gt;()</code> list, a manager modal mirroring the existing three, and a rotation arm if needed.</li>
+    <li>Add a tile in <code>renderAdminHub</code> and export the handlers.</li>
+  </ol>
+
+  <h4>Add a business rule (e.g. a tax band, a promotion type)</h4>
+  <p>Implement it as a pure function in <code>store.js</code> and route it through <code>computeTotals</code>; add a unit test. Keep all pricing in one place.</p>
+  <div class="box note"><div class="bt">House style</div>Match the surrounding code: 2-space indent, single quotes, terse helpers, comments that explain <em>why</em>. New markup uses inline <code>UI.*</code> handlers; new state changes end in <code>commit()</code>.</div>
+</section>
+
+<!-- ===================== 16 ===================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 16</div>
+  <h2 class="h">16 · Known Limitations &amp; Production Roadmap</h2>
+  <p class="lead">The architecture is deliberately single-device and client-only. These are the conscious trade-offs and the upgrade path when the business outgrows them.</p>
+
+  <h3>Current limitations</h3>
+  <table>
+    <tr><th>Limitation</th><th>Impact</th></tr>
+    <tr><td>Data is per-device (localStorage)</td><td>No shared history across terminals; backup is manual JSON export</td></tr>
+    <tr><td>Media is per-device (IndexedDB)</td><td>Each terminal must be configured separately</td></tr>
+    <tr><td>Card payments are simulated</td><td>No real settlement</td></tr>
+    <tr><td>Client-side auth</td><td>Not a hard security boundary; data visible in the browser</td></tr>
+    <tr><td>No real-time multi-terminal sync</td><td>Two tills can't share one live order book</td></tr>
+  </table>
+
+  <h3>Recommended path to production</h3>
+  <ol>
+    <li><strong>Back-end API + database</strong> (e.g. Node/Python + Postgres) as the source of truth for menu, orders, members and audit. The current <code>Store</code> becomes a thin client over an HTTP/realtime API — its function surface barely changes.</li>
+    <li><strong>Real payments</strong> via a PSP (Stripe/Adyen/Square) and/or a hardware terminal, replacing the EFTPOS simulation.</li>
+    <li><strong>Server-side auth</strong> (hashed PINs/credentials, sessions, per-action authorisation) replacing client gating.</li>
+    <li><strong>Central media CMS</strong> — move the three media managers' content to the server so head office pushes ads/branding to all kiosks, with scheduling (dayparting).</li>
+    <li><strong>Multi-terminal sync</strong> (websockets) for a shared live order book and instant menu/price propagation.</li>
+    <li><strong>CI</strong> — repo-committed tests on every push (the harness already exists).</li>
+  </ol>
+  <div class="box info"><div class="bt">Migration is incremental</div>Because the model/view split is clean, each step above can be adopted on its own. The fastest first win is putting <code>orders</code> behind an API so multiple terminals share one sales history.</div>
+</section>
+
+<!-- ===================== APPENDIX ===================== -->
+<section class="chapter">
+  <div class="kicker">Appendix</div>
+  <h2 class="h">A · Reference</h2>
+
+  <h3>A.1 — Store public API (window.Store)</h3>
+  <table>
+    <tr><th>Group</th><th>Functions</th></tr>
+    <tr><td>Lifecycle</td><td><code>load · subscribe · commit</code></td></tr>
+    <tr><td>Getters</td><td><code>getConfig · getMenu · getCart · getHeld · getOrders · getAuditLog · getCategories · getPromotions · findItem · itemsByCategory</code></td></tr>
+    <tr><td>Pricing</td><td><code>computeTotals · linePromo · money · round2</code></td></tr>
+    <tr><td>Cart</td><td><code>addItem · setQty · incQty · removeLine · updateLine · buildLine · setOrderType · setTable · setCustomer · setPager · setCartNote · setDiscount · setLineDiscount · clearAllDiscounts · clearCart</code></td></tr>
+    <tr><td>Auth / staff</td><td><code>getUsers · verifyUser · verifyAdminPin · setActiveCashier · addUser · updateUser · deleteUser</code></td></tr>
+    <tr><td>Orders</td><td><code>completeOrder · voidOrder · refundOrder · findOrder · lastOrder · searchOrders · refundableQty · remainingRefundable</code></td></tr>
+    <tr><td>Held / credits / till</td><td><code>holdOrder · recallHeld · deleteHeld · getCredits · addCredit · tillReport · ringOff · getTills</code></td></tr>
+    <tr><td>Modifiers / menu</td><td><code>getModifierGroups · groupsForItem · addonsUnit · displayName · upsertMenuItem · deleteMenuItem · toggleAvailability</code></td></tr>
+    <tr><td>Promotions</td><td><code>togglePromotion · addPromotion · updatePromotion · deletePromotion · promotionStatus · promotionActiveNow</code></td></tr>
+    <tr><td>Loyalty</td><td><code>getMembers · findMember · addMemberPoints</code></td></tr>
+    <tr><td>Customer display</td><td><code>getLive · setLive · clearLive</code></td></tr>
+    <tr><td>Reports / data</td><td><code>report · dayKey · updateConfig · resetAll · exportData · importData</code></td></tr>
+  </table>
+
+  <h3>A.2 — Storage schema</h3>
+  <table>
+    <tr><th>Store</th><th>Location</th><th>Key / structure</th></tr>
+    <tr><td>Business data</td><td>localStorage</td><td><code>mcq_pos_state_v1</code> → JSON { config, menu, promotions, cart, orders, held, auditLog, credits, tills, live }</td></tr>
+    <tr><td>Uploaded media</td><td>IndexedDB</td><td>DB <code>mcq-media</code> → store <code>media</code> (keyPath <code>id</code>, index <code>slot</code>)</td></tr>
+    <tr><td>Media flags</td><td>localStorage (in config)</td><td><code>kioskAdsHiddenDefaults · kioskAdsOff · loginHiddenDefault · loginVideoOff · customerHiddenDefault</code></td></tr>
+  </table>
+
+  <h3>A.3 — Glossary</h3>
+  <table>
+    <tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>Standing Order Tree</td><td>The self-service kiosk front-end</td></tr>
+    <tr><td>Attract loop</td><td>The full-screen ad video shown before a customer interacts</td></tr>
+    <tr><td>Slot</td><td>A media channel (ad / login / customer), each a rotating list</td></tr>
+    <tr><td>Built-in default</td><td>A clip shipped with the app; listed and removable, hidden via a config flag rather than deleted</td></tr>
+    <tr><td>Surgical render</td><td>Updating one element instead of re-rendering the whole view</td></tr>
+    <tr><td>commit()</td><td>persist state to localStorage and notify the UI to re-render</td></tr>
+    <tr><td>seedVersion</td><td>Dataset schema version driving forward-migration of persisted data</td></tr>
+  </table>
+
+  <div class="box note"><div class="bt">Document scope</div>This handover reflects code version 40. Pair it with the end-user <em>MCQ Café POS — User Guide</em> for operational procedures. The source is the ground truth; this document maps it.</div>
+</section>
+
+</body>
+</html>

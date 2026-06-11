@@ -95,7 +95,7 @@
   </div>
   <div class="foot">
     Vietnamese Street Kitchen · Browser-based POS<br>
-    <b>Version 30</b> &nbsp;·&nbsp; Last updated 11 June 2026
+    <b>Version 40</b> &nbsp;·&nbsp; Last updated 11 June 2026
   </div>
 </section>
 
@@ -126,6 +126,8 @@
     <li><span class="num">18</span> Data, Storage &amp; Backup</li>
     <li><span class="num">19</span> Keyboard, Touch &amp; Tips</li>
     <li><span class="num">20</span> Troubleshooting &amp; FAQ</li>
+    <li><span class="num">21</span> Screen Media &amp; Advertising
+      <ul><li>Order Tree Ads · Login Screen · Customer Display Video · the neon attract frame</li></ul></li>
     <li><span class="num">A</span> Appendix — Quick Reference (Logins &amp; Pricing)</li>
   </ol>
 </section>
@@ -154,6 +156,7 @@
     <tr><td><strong>Menu Manager</strong></td><td>Edit prices, enable/disable items, manage add-ons and promotions.</td></tr>
     <tr><td><strong>Settings</strong></td><td>Store details, logo, tax, staff accounts, and data backup.</td></tr>
     <tr><td><strong>Self-Service Kiosk</strong></td><td>Customer-facing ordering with EN/VI language, customise sheet, upsell and queue tickets.</td></tr>
+    <tr><td><strong>Screen Media</strong></td><td>Load your own photos and videos onto the kiosk ad screen, the login screen and the customer display — they rotate automatically (Chapter 21).</td></tr>
   </table>
 
   <div class="box note"><div class="bt">In a nutshell</div>Everything is saved in the browser on the device it runs on. Open the web address, log in with a PIN, and start selling.</div>
@@ -423,12 +426,13 @@
   <h2 class="h">14 · The Admin Hub <span class="pill">Manager</span></h2>
   <p class="lead">The Admin hub is the manager's launch pad. From here you reach the back-office tools and open the guest-facing screens.</p>
 
-  <figure><img src="img/10-admin-hub.jpg" alt="Admin hub"><figcaption>The Admin hub — tiles for reports, history, menu, settings, the audit log, the Customer Display and the Standing Order Tree.</figcaption></figure>
+  <figure><img src="img/10-admin-hub.jpg" alt="Admin hub"><figcaption>The Admin hub — back-office tools, the guest screens, and the three Screen Media managers (Order Tree Ads, Login Screen, Customer Display Video).</figcaption></figure>
 
   <ul>
     <li><strong>Back-office tiles</strong> — Dashboard, Transaction History, Menu Manager, Settings and the Audit log.</li>
     <li><strong>Customer Display</strong> — opens the second guest-facing screen (Chapter 15).</li>
     <li><strong>Standing Order Tree</strong> — opens the self-service kiosk (Chapter 16).</li>
+    <li><strong>Screen Media managers</strong> — three tiles, <strong>Order Tree Ads</strong>, <strong>Login Screen</strong> and <strong>Customer Display Video</strong>, let you load your own photos and videos onto every customer-facing screen (Chapter 21).</li>
   </ul>
   <div class="box note"><div class="bt">Audit log</div>The audit log records sensitive events — sales, refunds, voids, discounts, kiosk orders and settings changes — with who and when, and can be exported.</div>
 </section>
@@ -444,6 +448,7 @@
   <ul>
     <li>It updates in real time as items are added at the till (on the same device / browser).</li>
     <li>Between orders it plays appetising food <strong>videos</strong> and shows your branding.</li>
+    <li>You can replace the background with your own photos/videos — see <strong>Customer Display Video</strong> in Chapter 21.</li>
     <li>Open it from the <strong>Admin hub</strong>; close it with the <strong>✕</strong> in the corner.</li>
   </ul>
 </section>
@@ -565,6 +570,41 @@
 
   <h4>My changes to the code aren't showing online</h4>
   <p>After updating the hosted files, reload the web app on the host and refresh the browser. A hard refresh (clearing cache) ensures the newest version loads.</p>
+</section>
+
+<!-- ====================== 21. SCREEN MEDIA ====================== -->
+<section class="chapter">
+  <div class="kicker">Chapter 21</div>
+  <h2 class="h">21 · Screen Media &amp; Advertising <span class="pill">Manager</span></h2>
+  <p class="lead">Three managers in the Admin hub let you run your own photos and videos on every customer-facing screen — the kiosk ad loop, the login screen and the customer display. No editing of files is required: you upload through the app and the content appears instantly.</p>
+
+  <h3>How it works (all three the same)</h3>
+  <p>Each manager shows a simple list. Built-in clips that ship with the app appear as removable rows, and anything you add sits alongside them. When a screen has more than one item, the items <strong>rotate</strong> automatically — images change every few seconds and videos play through, then advance to the next.</p>
+  <ul>
+    <li><strong>＋ Add</strong> — pick one or several files at once (each up to 30&nbsp;MB).</li>
+    <li><strong>Remove</strong> — drops any item, including a built-in one.</li>
+    <li><strong>↺ Restore built-in</strong> — appears once you have removed a built-in, to bring it back.</li>
+  </ul>
+  <div class="box note"><div class="bt">Where it is stored</div>Uploaded media is saved <strong>in the browser on that device</strong> (no server). Upload on the actual counter / kiosk machine; it stays after the device is restarted. Built-in removals are remembered in the same way.</div>
+
+  <h3>Order Tree Ads</h3>
+  <p>Promotional clips that play full-screen on the Standing Order Tree's "tap to start" attract screen — the strongest place to catch a customer's eye. Add as many as you like and they loop in turn. A master switch, <strong>Play ad video on the kiosk</strong>, turns the video off entirely (the screen then shows just the background and the neon frame).</p>
+  <figure><img src="img/20-ads-manager.jpg" alt="Order Tree Ads manager"><figcaption>Order Tree Ads — the two built-in HD clips listed as removable rows, the on/off switch, and the button to add your own clips.</figcaption></figure>
+  <div class="box tip"><div class="bt">Keep it smooth</div>The attract clips that ship with the app are full HD. For your own uploads, keep each clip small (ideally under ~5&nbsp;MB) so the kiosk stays perfectly smooth.</div>
+
+  <h3>The neon attract frame</h3>
+  <p>The ad screen is wrapped in a glowing gold "night-market" neon frame with hanging lanterns and corner lights. It is on automatically and stays even if you turn the ad video off, framing the background instead.</p>
+  <figure><img src="img/12-kiosk-attract.jpg" alt="Kiosk attract with neon frame"><figcaption>The Standing Order Tree attract screen — a full-HD ad clip inside the glowing neon frame, with the dish marquee running along the bottom.</figcaption></figure>
+
+  <h3>Login Screen</h3>
+  <p>Backgrounds for the staff login screen. Add several images or videos and they rotate behind the account picker. While you have uploads they fill the screen; remove them all to bring back the built-in food collage. A toggle keeps or drops the built-in collage's short video.</p>
+  <figure><img src="img/21-login-manager.jpg" alt="Login Screen manager"><figcaption>Login Screen — the built-in collage listed as a removable row, the add button, and the built-in-video toggle.</figcaption></figure>
+
+  <h3>Customer Display Video</h3>
+  <p>The image or video that plays behind the live order on the customer-facing display. Add several and they rotate; remove everything for a plain dark panel (the order stays perfectly readable). The built-in clip is listed and removable, with restore.</p>
+  <figure><img src="img/22-customer-manager.jpg" alt="Customer Display Video manager"><figcaption>Customer Display Video — the built-in clip as a removable row plus the button to add your own backgrounds.</figcaption></figure>
+
+  <div class="box warn"><div class="bt">Per-device reminder</div>Because media lives in the browser, each device manages its own. If you run the kiosk and the counter on separate machines, upload the content on each one.</div>
 </section>
 
 <!-- ====================== APPENDIX ====================== -->
