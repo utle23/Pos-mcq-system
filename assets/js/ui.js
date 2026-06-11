@@ -6,6 +6,7 @@
   'use strict';
 
   const S = global.Store;
+  const M = global.Media;   // admin-uploaded login bg + kiosk ad clips (IndexedDB)
 
   /* ---- helpers ----------------------------------------------------------- */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -82,6 +83,13 @@
     renderTopbar();
     render();
     setInterval(renderClock, 1000 * 30);
+    // Load any admin-uploaded media (login background, kiosk ad clips) from
+    // IndexedDB, then repaint whichever media-bearing view is showing so the
+    // custom clips replace the bundled defaults without a flash.
+    if (M) M.preload().then(() => {
+      if (!ui.currentUser) { renderTopbar(); render(); }
+      else if (ui.view === 'kiosk') kioskPaint();
+    }).catch(() => {});
   }
 
   // Re-render parts that depend on state (called on every commit).
@@ -178,9 +186,10 @@
   }
   function render() {
     const v = $('#view'); if (!v) return;
+    clearTimeout(loginBgTimer); clearTimeout(custBgTimer);   // stop slideshow timers before repaint
     document.body.classList.toggle('login-view', !ui.currentUser);
     document.body.classList.toggle('screen-view', ui.view === 'backscreen' || ui.view === 'kiosk');
-    if (!ui.currentUser) { v.innerHTML = renderLogin(); return; }
+    if (!ui.currentUser) { v.innerHTML = renderLogin(); armLoginRotate(); return; }
     if (GATED_VIEWS.includes(ui.view) && !(ui.adminUnlocked || isAdminUser())) { ui.view = 'register'; }
     if (ui.view === 'register') v.innerHTML = renderPOS();
     else if (ui.view === 'admin') v.innerHTML = renderAdminHub();
@@ -189,7 +198,7 @@
     else if (ui.view === 'menu') v.innerHTML = renderMenuManager();
     else if (ui.view === 'settings') v.innerHTML = renderSettings();
     else if (ui.view === 'audit') v.innerHTML = renderAuditLog();
-    else if (ui.view === 'backscreen') v.innerHTML = renderBackScreen();
+    else if (ui.view === 'backscreen') { v.innerHTML = renderBackScreen(); armCustRotate(); }
     else if (ui.view === 'kiosk') v.innerHTML = renderKiosk();
     if (ui.view === 'register' && ui.search) { const s = $('#search'); if (s) s.value = ui.search; }
     if (ui.view === 'orders' && ui.orderQuery) {
@@ -200,19 +209,60 @@
   /* ====================================================================== *
    * LOGIN  (choose cashier → PIN)
    * ====================================================================== */
+  // Login background = a rotating playlist of admin-uploaded images/videos
+  // (Admin → Login Screen). While uploads exist they fill the screen and rotate;
+  // with none, the built-in 3-panel collage shows (unless removed).
+  let loginBgIdx = 0, loginBgTimer = null;
+  function loginBgItemHTML(it, loop) {
+    return it.kind === 'video'
+      ? `<video class="login-bg-item" src="${it.url}" autoplay muted playsinline ${loop ? 'loop' : 'onended="UI.loginBgNext()"'} onerror="UI.loginBgNext()"></video>`
+      : `<img class="login-bg-item" src="${it.url}" alt="">`;
+  }
+  function armLoginRotate() {
+    clearTimeout(loginBgTimer);
+    const ups = M ? M.login() : [];
+    if (ups.length < 2) return;                 // 0–1 item → nothing to rotate
+    const cur = ups[loginBgIdx % ups.length];
+    if (cur && cur.kind === 'image') loginBgTimer = setTimeout(loginBgNext, 7000);
+    // video items advance themselves via their onended handler
+  }
+  function loginBgNext() {
+    clearTimeout(loginBgTimer);
+    const ups = M ? M.login() : [];
+    if (ups.length < 2) return;
+    loginBgIdx = (loginBgIdx + 1) % ups.length;
+    const host = $('#login-bg'); if (!host) return;
+    host.innerHTML = loginBgItemHTML(ups[loginBgIdx], false);
+    armLoginRotate();
+  }
   function renderLogin() {
     const c = S.getConfig();
     const users = S.getUsers();
+    const ups = M ? M.login() : [];             // uploaded backgrounds (rotate, full-bleed)
+    const hideDefault = !!c.loginHiddenDefault;
+    const videoOff = !!c.loginVideoOff;
+    loginBgIdx = 0;
+    let bg;
+    if (ups.length) {
+      bg = `<div id="login-bg" class="login-bg" aria-hidden="true">${loginBgItemHTML(ups[0], ups.length === 1)}</div>`;
+    } else if (!hideDefault) {
+      const defaultMid = videoOff
+        ? `<div class="lc-panel"><img src="assets/images/vietnam-hero.jpg" alt=""></div>`
+        : `<div class="lc-panel lc-video">
+             <video src="${LOGIN_VIDS[0]}" autoplay muted playsinline preload="auto"
+               poster="assets/images/food-spread.jpg"
+               onended="UI.loginNextVid(this)" onerror="this.classList.add('gone')"></video>
+           </div>`;
+      bg = `<div class="login-collage" aria-hidden="true">
+             <div class="lc-panel"><img src="assets/images/login-bg.jpg?v=27" alt=""></div>
+             ${defaultMid}
+             <div class="lc-panel"><img src="assets/images/food-spread.jpg" alt=""></div>
+           </div>`;
+    } else {
+      bg = `<div class="login-bg login-bg-plain" aria-hidden="true"></div>`;
+    }
     return `<div class="login">
-      <div class="login-collage" aria-hidden="true">
-        <div class="lc-panel"><img src="assets/images/login-bg.jpg?v=27" alt=""></div>
-        <div class="lc-panel lc-video">
-          <video src="${LOGIN_VIDS[0]}" autoplay muted playsinline preload="auto"
-            poster="assets/images/food-spread.jpg"
-            onended="UI.loginNextVid(this)" onerror="this.classList.add('gone')"></video>
-        </div>
-        <div class="lc-panel"><img src="assets/images/food-spread.jpg" alt=""></div>
-      </div>
+      ${bg}
       <div class="login-scrim" aria-hidden="true"></div>
       <div class="login-card">
         <div class="login-brand">
@@ -289,6 +339,21 @@
           <span class="hub-ico">🛎️</span>
           <span class="hub-label">Standing Order Tree</span>
           <span class="hub-desc">Self-order kiosk · ads, membership, queue tickets</span>
+        </button>
+        <button class="hub-tile media-tile" onclick="UI.openAdsManager()">
+          <span class="hub-ico">🎬</span>
+          <span class="hub-label">Order Tree Ads</span>
+          <span class="hub-desc">Upload promo clips — they loop on the kiosk attract screen</span>
+        </button>
+        <button class="hub-tile media-tile" onclick="UI.openLoginMedia()">
+          <span class="hub-ico">🖼️</span>
+          <span class="hub-label">Login Screen</span>
+          <span class="hub-desc">Set the login background image or video</span>
+        </button>
+        <button class="hub-tile media-tile" onclick="UI.openCustomerMedia()">
+          <span class="hub-ico">🎞️</span>
+          <span class="hub-label">Customer Display Video</span>
+          <span class="hub-desc">Background image or video on the customer-facing screen</span>
         </button>
       </div>
     </div>`;
@@ -829,17 +894,35 @@
   /* ====================================================================== *
    * MODALS — generic
    * ====================================================================== */
+  // While a modal is up, pause any background video. A playing <video> behind
+  // the frosted (backdrop-blur) overlay forces the browser to re-blur a moving
+  // layer every frame — that's what made PIN entry on the login screen feel
+  // laggy. Pausing freezes the layer so the compositor can cache it.
+  let _pausedVids = [];
+  function pauseBgVideos() {
+    _pausedVids = [];
+    document.querySelectorAll('#view video').forEach((v) => {
+      if (!v.paused) { try { v.pause(); _pausedVids.push(v); } catch (_) {} }
+    });
+  }
+  function resumeBgVideos() {
+    _pausedVids.forEach((v) => { const p = v.play(); if (p && p.catch) p.catch(() => {}); });
+    _pausedVids = [];
+  }
   function openModal(html) {
     const root = $('#modal-root');
     // If a modal is already open, this is a content refresh — suppress the
     // entrance animation so it doesn't flash like a page reload.
-    root.classList.toggle('reopen', root.classList.contains('show'));
+    const wasOpen = root.classList.contains('show');
+    root.classList.toggle('reopen', wasOpen);
     root.innerHTML = html;
     root.classList.add('show');
+    if (!wasOpen) pauseBgVideos();   // only on the initial open, not on refreshes
   }
   function closeModal() {
     const root = $('#modal-root');
     root.classList.remove('show', 'reopen'); root.innerHTML = '';
+    resumeBgVideos();
     // Abandoning a checkout clears the live guest screen; completing it leaves the
     // 'done' thank-you broadcast in place (completeSale set it before closing).
     if (payState && S.getLive().mode === 'pay') S.clearLive();
@@ -2671,6 +2754,193 @@
   }
   function removeLogo() { S.updateConfig({ logo: '' }); toast('Logo removed'); }
 
+  /* ====================================================================== *
+   * MEDIA MANAGERS  —  Order Tree ad clips + Login screen background
+   * Uploaded files live in the browser (IndexedDB via Media). The kiosk and
+   * login screens read them through Media's url cache (see media.js).
+   * ====================================================================== */
+  const MEDIA_MAX = 30 * 1024 * 1024;   // 30MB/file guard — compress big clips first
+  const fmtSize = (n) => n >= 1024 * 1024 ? (n / 1048576).toFixed(1) + ' MB'
+    : Math.max(1, Math.round(n / 1024)) + ' KB';
+
+  function mediaUnavailable() {
+    openModal(modalShell('Media storage unavailable',
+      `<p class="confirm-msg">This browser can't store uploaded media (IndexedDB is disabled). Try a normal (non-private) window.</p>`,
+      { size: 'sm', foot: `<button class="solid-btn" onclick="UI.closeModal()">OK</button>` }));
+  }
+
+  // ---- Order Tree ads (many clips, looped on the attract screen) ----------
+  function openAdsManager() {
+    if (!M || !M.available) return mediaUnavailable();
+    const cfg = S.getConfig();
+    const adsOff = !!cfg.kioskAdsOff;
+    const items = activeAds();                                  // built-ins (not removed) + uploads
+    const hiddenCount = (cfg.kioskAdsHiddenDefaults || []).length;
+    const list = items.length
+      ? `<div class="media-list">${items.map((e) => `
+          <div class="media-row">
+            <video class="media-thumb" src="${e.url}" muted playsinline preload="metadata"></video>
+            <div class="media-meta"><strong>${esc(e.name)}</strong><span>${e.builtin ? 'Built-in · HD' : fmtSize(e.size) + ' · uploaded'}</span></div>
+            <button class="ghost-btn danger sm" onclick="UI.adRemove('${e.id}')">Remove</button>
+          </div>`).join('')}</div>`
+      : `<p class="media-empty">No clips — the “tap to start” screen shows the background only. Add a video below${hiddenCount ? ', or restore the built-in clips' : ''}.</p>`;
+    openModal(modalShell('🎬 Order Tree Ads', `
+      <div class="media-switch">
+        <div class="media-switch-tx"><strong>Play ad video on the kiosk</strong>
+          <span>${adsOff ? 'Off — the “tap to start” screen shows the background only.' : 'On — the clips below loop on the “tap to start” screen.'}</span></div>
+        <button class="switch ${adsOff ? '' : 'on'}" role="switch" aria-checked="${!adsOff}" onclick="UI.kioskAdsToggle()"><span></span></button>
+      </div>
+      <p class="media-note">These clips play full-screen on the Standing Order Tree “tap to start” screen and rotate in a loop. The two built-in HD clips are listed below — remove them if you only want your own. Keep each upload small (ideally under ~5&nbsp;MB) so the kiosk stays smooth.</p>
+      ${list}
+      <label class="media-add">
+        <input type="file" accept="video/*" multiple onchange="UI.adAddFiles(this)" hidden>
+        <span class="solid-btn">＋ Add video clip(s)</span>
+      </label>
+      ${hiddenCount ? `<button class="ghost-btn sm media-restore" onclick="UI.adRestoreDefaults()">↺ Restore built-in clips</button>` : ''}`,
+      { size: 'md', foot: `<button class="ghost-btn" onclick="UI.closeModal()">Done</button>` }));
+  }
+  function kioskAdsToggle() {
+    const off = !!S.getConfig().kioskAdsOff;
+    S.updateConfig({ kioskAdsOff: !off }); openAdsManager(); toast(off ? 'Ad video on' : 'Ad video off');
+  }
+  function adRestoreDefaults() { S.updateConfig({ kioskAdsHiddenDefaults: [] }); openAdsManager(); toast('Built-in clips restored'); }
+  function adAddFiles(input) {
+    const files = Array.from(input.files || []); input.value = '';
+    if (!files.length) return;
+    const bad = files.find((f) => (f.type || '').indexOf('video') !== 0);
+    if (bad) return toast('Only video files can be added here');
+    const big = files.find((f) => f.size > MEDIA_MAX);
+    if (big) return toast('“' + big.name + '” is over 30MB — compress it first');
+    toast('Saving…');
+    files.reduce((p, f) => p.then(() => M.add('ad', f)), Promise.resolve())
+      .then(() => { openAdsManager(); toast('Ad clip' + (files.length > 1 ? 's' : '') + ' added'); })
+      .catch(() => toast('Could not save the video'));
+  }
+  function adRemove(id) {
+    if (id.indexOf('def-') === 0) {   // built-in clip → record as hidden in config
+      const hidden = (S.getConfig().kioskAdsHiddenDefaults || []).concat([id]);
+      S.updateConfig({ kioskAdsHiddenDefaults: hidden });
+      openAdsManager(); toast('Removed');
+    } else {                          // uploaded clip → delete from storage
+      M.remove(id).then(() => { openAdsManager(); toast('Removed'); }).catch(() => toast('Could not remove'));
+    }
+  }
+
+  // ---- Login screen backgrounds (built-in collage + uploads that rotate) --
+  function openLoginMedia() {
+    if (!M || !M.available) return mediaUnavailable();
+    const cfg = S.getConfig();
+    const hideDefault = !!cfg.loginHiddenDefault;
+    const videoOff = !!cfg.loginVideoOff;
+    const ups = M.login();
+    const builtinRow = !hideDefault ? `
+      <div class="media-row">
+        <img class="media-thumb" src="assets/images/login-bg.jpg?v=27" alt="">
+        <div class="media-meta"><strong>Built-in collage</strong><span>Built-in · photos + clip</span></div>
+        <button class="ghost-btn danger sm" onclick="UI.loginRemove('def-login')">Remove</button>
+      </div>` : '';
+    const upRows = ups.map((e) => `
+      <div class="media-row">
+        ${e.kind === 'video' ? `<video class="media-thumb" src="${e.url}" muted playsinline preload="metadata"></video>` : `<img class="media-thumb" src="${e.url}" alt="">`}
+        <div class="media-meta"><strong>${esc(e.name)}</strong><span>${fmtSize(e.size)} · ${e.kind}</span></div>
+        <button class="ghost-btn danger sm" onclick="UI.loginRemove('${e.id}')">Remove</button>
+      </div>`).join('');
+    const rows = builtinRow + upRows;
+    const list = rows
+      ? `<div class="media-list">${rows}</div>`
+      : `<p class="media-empty">No backgrounds — the login screen is a plain dark panel. Add an image/video below, or restore the built-in collage.</p>`;
+    openModal(modalShell('🖼️ Login Screen', `
+      <p class="media-note">Backgrounds for the login screen. Add several and they rotate. While you have uploads they fill the screen and the built-in collage steps aside — remove all uploads to show it again. Each file ≤ 30&nbsp;MB.</p>
+      ${list}
+      <label class="media-add">
+        <input type="file" accept="image/*,video/*" multiple onchange="UI.loginMediaAddFiles(this)" hidden>
+        <span class="solid-btn">＋ Add image / video</span>
+      </label>
+      <div class="media-switch">
+        <div class="media-switch-tx"><strong>Built-in login video</strong>
+          <span>${ups.length ? 'Not used while your uploads are active.' : (hideDefault ? 'Built-in collage removed.' : (videoOff ? 'Off — built-in shows still images only.' : 'On — a short clip plays in the built-in collage.'))}</span></div>
+        <button class="switch ${videoOff ? '' : 'on'}" role="switch" aria-checked="${!videoOff}" onclick="UI.loginVideoToggle()"><span></span></button>
+      </div>
+      ${hideDefault ? `<button class="ghost-btn sm media-restore" onclick="UI.loginRestoreDefault()">↺ Restore built-in collage</button>` : ''}`,
+      { size: 'md', foot: `<button class="ghost-btn" onclick="UI.closeModal()">Done</button>` }));
+  }
+  function loginVideoToggle() {
+    const off = !!S.getConfig().loginVideoOff;
+    S.updateConfig({ loginVideoOff: !off }); openLoginMedia(); toast(off ? 'Login video on' : 'Login video off');
+  }
+  function loginMediaAddFiles(input) {
+    const files = Array.from(input.files || []); input.value = '';
+    if (!files.length) return;
+    const bad = files.find((f) => { const t = f.type || ''; return t.indexOf('image') !== 0 && t.indexOf('video') !== 0; });
+    if (bad) return toast('Only images or videos can be added');
+    const big = files.find((f) => f.size > MEDIA_MAX);
+    if (big) return toast('“' + big.name + '” is over 30MB — use a smaller one');
+    toast('Saving…');
+    files.reduce((p, f) => p.then(() => M.add('login', f)), Promise.resolve())
+      .then(() => { openLoginMedia(); toast('Background' + (files.length > 1 ? 's' : '') + ' added'); })
+      .catch(() => toast('Could not save the file'));
+  }
+  function loginRemove(id) {
+    if (id === 'def-login') {                          // built-in collage → hide via config
+      S.updateConfig({ loginHiddenDefault: true }); openLoginMedia(); toast('Removed');
+    } else {                                           // uploaded background → delete
+      M.remove(id).then(() => { openLoginMedia(); toast('Removed'); }).catch(() => toast('Could not remove'));
+    }
+  }
+  function loginRestoreDefault() { S.updateConfig({ loginHiddenDefault: false }); openLoginMedia(); toast('Built-in collage restored'); }
+
+  // ---- Customer display backgrounds (built-in clip + uploads that rotate) -
+  function openCustomerMedia() {
+    if (!M || !M.available) return mediaUnavailable();
+    const hideDefault = !!S.getConfig().customerHiddenDefault;
+    const ups = M.customer();
+    const builtinRow = !hideDefault ? `
+      <div class="media-row">
+        <video class="media-thumb" src="${CUSTOMER_VID}" muted playsinline preload="metadata"></video>
+        <div class="media-meta"><strong>Built-in clip</strong><span>Built-in · video</span></div>
+        <button class="ghost-btn danger sm" onclick="UI.customerRemove('def-cust')">Remove</button>
+      </div>` : '';
+    const upRows = ups.map((e) => `
+      <div class="media-row">
+        ${e.kind === 'video' ? `<video class="media-thumb" src="${e.url}" muted playsinline preload="metadata"></video>` : `<img class="media-thumb" src="${e.url}" alt="">`}
+        <div class="media-meta"><strong>${esc(e.name)}</strong><span>${fmtSize(e.size)} · ${e.kind}</span></div>
+        <button class="ghost-btn danger sm" onclick="UI.customerRemove('${e.id}')">Remove</button>
+      </div>`).join('');
+    const rows = builtinRow + upRows;
+    const list = rows
+      ? `<div class="media-list">${rows}</div>`
+      : `<p class="media-empty">No clips — the customer display shows a plain dark panel behind the order. Add an image/video below, or restore the built-in clip.</p>`;
+    openModal(modalShell('🎞️ Customer Display Video', `
+      <p class="media-note">Images / videos that play behind the live order on the customer-facing display. Add several and they rotate. The built-in clip is listed below — remove it if you only want your own. Each file ≤ 30&nbsp;MB.</p>
+      ${list}
+      <label class="media-add">
+        <input type="file" accept="image/*,video/*" multiple onchange="UI.customerMediaAddFiles(this)" hidden>
+        <span class="solid-btn">＋ Add image / video</span>
+      </label>
+      ${hideDefault ? `<button class="ghost-btn sm media-restore" onclick="UI.customerRestoreDefault()">↺ Restore built-in clip</button>` : ''}`,
+      { size: 'md', foot: `<button class="ghost-btn" onclick="UI.closeModal()">Done</button>` }));
+  }
+  function customerMediaAddFiles(input) {
+    const files = Array.from(input.files || []); input.value = '';
+    if (!files.length) return;
+    const bad = files.find((f) => { const t = f.type || ''; return t.indexOf('image') !== 0 && t.indexOf('video') !== 0; });
+    if (bad) return toast('Only images or videos can be added');
+    const big = files.find((f) => f.size > MEDIA_MAX);
+    if (big) return toast('“' + big.name + '” is over 30MB — use a smaller one');
+    toast('Saving…');
+    files.reduce((p, f) => p.then(() => M.add('customer', f)), Promise.resolve())
+      .then(() => { openCustomerMedia(); toast('Background' + (files.length > 1 ? 's' : '') + ' added'); })
+      .catch(() => toast('Could not save the file'));
+  }
+  function customerRemove(id) {
+    if (id === 'def-cust') {
+      S.updateConfig({ customerHiddenDefault: true }); openCustomerMedia(); toast('Removed');
+    } else {
+      M.remove(id).then(() => { openCustomerMedia(); toast('Removed'); }).catch(() => toast('Could not remove'));
+    }
+  }
+  function customerRestoreDefault() { S.updateConfig({ customerHiddenDefault: false }); openCustomerMedia(); toast('Built-in clip restored'); }
+
   function exportData() {
     const blob = new Blob([S.exportData()], { type: 'application/json' });
     const a = document.createElement('a');
@@ -2714,13 +2984,49 @@
 
   // Full shell — the brand/video half is static so surgical repaints
   // (paintBackScreen) never restart the looping video during live payment.
+  // Customer-display background = built-in clip + admin uploads, rotating.
+  const CUSTOMER_VID = 'assets/videos/vid-847.mp4?v=2';   // built-in customer-display clip
+  const DEFAULT_CUSTOMER = [{ id: 'def-cust', name: 'Built-in clip', url: CUSTOMER_VID, kind: 'video', builtin: true }];
+  let custBgIdx = 0, custBgTimer = null;
+  function activeCustomer() {
+    const hidden = !!S.getConfig().customerHiddenDefault;
+    return (hidden ? [] : DEFAULT_CUSTOMER).concat(M ? M.customer() : []);
+  }
+  function custMediaItemHTML(it, loop) {
+    return it.kind === 'video'
+      ? `<video class="cust2-vid" src="${it.url}" autoplay muted ${loop ? 'loop' : 'onended="UI.custBgNext()"'} playsinline poster="assets/images/backscreen-bg.jpg" onerror="this.classList.add('gone')"></video>`
+      : `<img class="cust2-vid" src="${it.url}" alt="" aria-hidden="true">`;
+  }
+  function armCustRotate() {
+    clearTimeout(custBgTimer);
+    const items = activeCustomer();
+    if (items.length < 2) return;
+    const cur = items[custBgIdx % items.length];
+    if (cur && cur.kind === 'image') custBgTimer = setTimeout(custBgNext, 8000);
+  }
+  function custBgNext() {
+    clearTimeout(custBgTimer);
+    const items = activeCustomer();
+    if (items.length < 2) return;
+    custBgIdx = (custBgIdx + 1) % items.length;
+    const cur = $('#view .cust2-media .cust2-vid'); if (!cur) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = custMediaItemHTML(items[custBgIdx], false);
+    cur.replaceWith(wrap.firstElementChild);
+    armCustRotate();
+  }
   function renderBackScreen() {
     const c = S.getConfig();
     const parts = backScreenParts();
+    const items = activeCustomer();
+    custBgIdx = 0;
+    const custMediaEl = items.length
+      ? custMediaItemHTML(items[0], items.length === 1)
+      : `<div class="cust2-vid cust2-vid-blank" aria-hidden="true"></div>`;
     return `<div class="cust2${parts.rootClass}">
       <button class="screen-exit" onclick="UI.exitScreen()" title="Exit to admin">✕</button>
       <div class="cust2-media">
-        <video class="cust2-vid" src="assets/videos/vid-847.mp4" autoplay muted loop playsinline preload="auto" poster="assets/images/backscreen-bg.jpg" onerror="this.classList.add('gone')"></video>
+        ${custMediaEl}
         <div class="cust2-media-scrim" aria-hidden="true"></div>
         <div class="cust2-brand">
           ${c.logo ? `<img class="cust2-logo" src="${esc(c.logo)}" alt="">` : ''}
@@ -2859,9 +3165,22 @@
    * attract(video) → home → menu(+cart) → member → pay → done(queue ticket)
    * Orders share the SAME daily queue number as the counter (nextDailyNo).
    * ====================================================================== */
-  const KIOSK_ADS = ['assets/videos/ad1.mp4', 'assets/videos/ad2.mp4'];
-  const KIOSK_HOME_VIDS = ['assets/videos/vid-180.mp4', 'assets/videos/vid-223.mp4'];
-  const LOGIN_VIDS = ['assets/videos/vid-952.mp4', 'assets/videos/vid-847.mp4'];
+  const KIOSK_HOME_VIDS = ['assets/videos/vid-180.mp4?v=2', 'assets/videos/vid-223.mp4?v=2'];
+  const LOGIN_VIDS = ['assets/videos/vid-952.mp4?v=2', 'assets/videos/vid-847.mp4?v=2'];
+  // The two HD clips that ship with the app. They appear as real, removable rows
+  // in the Order Tree Ads manager; removing one records its id in config so it
+  // no longer plays. Uploaded clips are appended after the (visible) built-ins.
+  const DEFAULT_ADS = [
+    { id: 'def-ad1', name: 'Built-in clip 1', url: 'assets/videos/ad1.mp4?v=2', builtin: true },
+    { id: 'def-ad2', name: 'Built-in clip 2', url: 'assets/videos/ad2.mp4?v=2', builtin: true }
+  ];
+  // Everything that should currently play on the attract screen, in order.
+  function activeAds() {
+    const hidden = S.getConfig().kioskAdsHiddenDefaults || [];
+    const defs = DEFAULT_ADS.filter((d) => !hidden.includes(d.id));
+    return defs.concat(M ? M.ads() : []);
+  }
+  function adPlaylist() { return activeAds().map((e) => e.url); }
   let kioskCart = newKioskCart();
   let kioskOrder = null, kioskAdIdx = 0, kioskHomeIdx = 0, kioskPayTok = null, kioskDoneTimer = null;
   let kioskSheet = null, kioskIdleTimer = null;
@@ -2896,7 +3215,7 @@
   function kioskGo(stage) { if (stage !== 'done') clearTimeout(kioskDoneTimer); if (stage !== 'menu') ui.kioskCartOpen = false; ui.kioskStage = stage; kioskPaint(); }
   function kioskToggleCart() { ui.kioskCartOpen = !ui.kioskCartOpen; kioskPaint(); }
   function kioskBack() { ui.kioskStage = kioskCart.lines.length ? 'menu' : 'home'; kioskPaint(); }
-  function kioskNextAd(v) { kioskAdIdx = (kioskAdIdx + 1) % KIOSK_ADS.length; v.src = KIOSK_ADS[kioskAdIdx]; const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+  function kioskNextAd(v) { const list = adPlaylist(); if (!list.length) return; kioskAdIdx = (kioskAdIdx + 1) % list.length; v.src = list[kioskAdIdx]; const p = v.play(); if (p && p.catch) p.catch(() => {}); }
   function kioskLangToggle() { ui.kioskLang = ui.kioskLang === 'en' ? 'vi' : 'en'; kioskPaint(); }
   function kioskSetLang(l) { if (ui.kioskLang === l) return; ui.kioskLang = l; kioskPaint(); }
   function kioskFilterSet(f) { ui.kioskFilter = f; kioskPaint(); }
@@ -3214,12 +3533,17 @@
   }
   function kioskAttract() {
     const marquee = kioskPopular(8).map((it) => `${esc(it.name)} · ${money(it.price)}`).join('  🥢  ');
+    kioskAdIdx = 0;   // always start the ad loop from the first clip
+    const adsOff = !!S.getConfig().kioskAdsOff;   // master switch
+    const ads = adPlaylist();                     // built-ins (not removed) + uploads
+    const showVid = !adsOff && ads.length;        // nothing to play → background only
     return `<div class="kx-attract" onclick="UI.kioskGo('home')">
       <img class="kx-bg" src="assets/images/login-bg.jpg?v=23" alt="" aria-hidden="true">
-      <video class="kx-video" src="${KIOSK_ADS[0]}" autoplay muted playsinline preload="auto"
+      ${showVid ? `<video class="kx-video" src="${ads[0]}" autoplay muted playsinline preload="auto"
         poster="assets/images/login-bg.jpg?v=27"
-        onended="UI.kioskNextAd(this)" onerror="this.classList.add('gone')"></video>
+        onended="UI.kioskNextAd(this)" onerror="this.classList.add('gone')"></video>` : ''}
       <div class="kx-attract-scrim" aria-hidden="true"></div>
+      <div class="kx-neon-frame" aria-hidden="true"><i class="nf-c tl"></i><i class="nf-c tr"></i><i class="nf-c bl"></i><i class="nf-c br"></i></div>
       <div class="kx-lanterns" aria-hidden="true">${'<span>🏮</span>'.repeat(6)}</div>
       <div class="kx-attract-inner">
         <div class="kx-eyebrow">${esc(S.getConfig().storeName)} · Vietnamese Street Food</div>
@@ -3640,6 +3964,10 @@
     // settings / staff
     saveSettings, togglePromo, uploadLogo, removeLogo, exportData, importPrompt, resetData,
     userSet, userAdd, userDel,
+    // media managers (order tree ads + login backgrounds + customer display)
+    openAdsManager, adAddFiles, adRemove, adRestoreDefaults, kioskAdsToggle,
+    openLoginMedia, loginMediaAddFiles, loginRemove, loginRestoreDefault, loginVideoToggle, loginBgNext,
+    openCustomerMedia, customerMediaAddFiles, customerRemove, customerRestoreDefault, custBgNext,
     // customer display + standing order tree (kiosk)
     openBackScreen, exitScreen, openKiosk, kioskGo, kioskBack, kioskNextAd, kioskNextHomeAd, loginNextVid, kioskToggleCart,
     kioskAdd, kioskSetCat, kioskQty, kioskScan, kioskLookup, kioskClearMember, kioskCardPay, kioskNewOrder,
