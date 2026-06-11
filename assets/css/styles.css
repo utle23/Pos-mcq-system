@@ -1330,8 +1330,8 @@ body.screen-view #view { height: 100vh; height: 100dvh; }
 .kx-home { height: 100%; display: flex; flex-direction: column; background:
   radial-gradient(100% 70% at 50% 0%, rgba(255,206,140,.55), transparent 62%),
   linear-gradient(180deg, #fcf4e6 0%, #f4e7cf 55%, #eed9b8 100%); }
-.kx-home-hero { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1.05fr; align-items: center; gap: clamp(20px, 4vw, 56px); padding: clamp(18px, 3.5vw, 52px); }
-.kx-home-media { position: relative; justify-self: center; width: min(40vw, 360px); aspect-ratio: 9 / 16; max-height: 60vh; border-radius: 28px; overflow: hidden; background: #1a1410; box-shadow: 0 30px 64px -24px rgba(0,0,0,.55), 0 0 0 6px rgba(255,255,255,.5); animation: floaty 6s ease-in-out infinite; }
+.kx-home-hero { flex: 1 1 auto; min-height: 0; overflow: hidden; display: grid; grid-template-columns: 1fr 1.05fr; grid-template-rows: minmax(0, 1fr); align-items: center; gap: clamp(20px, 4vw, 56px); padding: clamp(14px, 2.6vw, 36px) clamp(18px, 3.5vw, 52px); }
+.kx-home-media { position: relative; justify-self: center; width: min(34vw, 300px); aspect-ratio: 9 / 16; max-height: 100%; border-radius: 28px; overflow: hidden; background: #1a1410; box-shadow: 0 30px 64px -24px rgba(0,0,0,.55), 0 0 0 6px rgba(255,255,255,.5); animation: floaty 6s ease-in-out infinite; }
 @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 .kx-home-vid { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
 .kx-home-vid.gone { display: none; }
@@ -1347,10 +1347,10 @@ body.screen-view #view { height: 100vh; height: 100dvh; }
 @keyframes shimmer { 0% { left: -60%; } 60%,100% { left: 130%; } }
 .kx-member-cta { display: block; margin-top: 16px; padding: 14px 22px; border-radius: 14px; background: var(--surface); border: 1.5px dashed var(--gold); color: var(--gold-3); font-weight: 700; font-size: clamp(13px, 1.5vw, 17px); text-align: left; }
 .kx-member-cta.on { border-style: solid; background: var(--gold-soft); }
-.kx-pop { padding: 0 clamp(20px, 4vw, 56px) clamp(20px, 3vw, 34px); }
-.kx-pop-head { font-family: var(--serif); font-size: clamp(18px, 2.4vw, 26px); font-weight: 800; margin-bottom: 14px; }
-.kx-pop-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; scroll-snap-type: x mandatory; }
-.kx-pop-row .kx-item { flex: 0 0 clamp(150px, 20vw, 210px); scroll-snap-align: start; }
+.kx-pop { flex: 0 0 auto; padding: 0 clamp(20px, 4vw, 56px) clamp(16px, 2.4vw, 28px); }
+.kx-pop-head { font-family: var(--serif); font-size: clamp(17px, 2.2vw, 24px); font-weight: 800; margin-bottom: 10px; }
+.kx-pop-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+.kx-pop-row .kx-item { flex: 0 0 clamp(140px, 15vw, 182px); scroll-snap-align: start; }
 
 /* item card (home + menu) — main area opens the detail sheet, footer is an
  * in-place add button that becomes a quantity stepper once it's in the cart. */
