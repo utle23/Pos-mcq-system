@@ -2914,6 +2914,8 @@
     if (item.isCombo) return kioskOpenItem(itemId);   // combos must pick fillings
     const ex = kioskFindPlain(itemId);
     if (ex) ex.qty += 1; else kioskCart.lines.push(S.buildLine(item, { qty: 1 }));
+    // On the menu, update only the tapped card + bottom bar — no full repaint.
+    if (ui.kioskStage === 'menu' && kioskSyncCard(itemId)) { kioskSyncBar(); armKioskIdle(); return; }
     if (ui.kioskStage === 'home') ui.kioskStage = 'menu';
     kioskPaint();
   }
@@ -2923,6 +2925,7 @@
     if (!ex) return;
     ex.qty -= 1;
     if (ex.qty <= 0) kioskCart.lines = kioskCart.lines.filter((l) => l !== ex);
+    if (ui.kioskStage === 'menu' && kioskSyncCard(itemId)) { kioskSyncBar(); armKioskIdle(); return; }
     if (!kioskCart.lines.length && ui.kioskStage === 'pay') ui.kioskStage = 'menu';
     kioskPaint();
   }
@@ -3242,32 +3245,57 @@
       </div>
     </header>`;
   }
+  // The card footer (add button ⇄ in-place stepper). Shared by the full render
+  // and the surgical sync so they never drift.
+  function kioskCardCtrl(item, qty, soldOut) {
+    if (soldOut) return '<span class="kx-ctrl-sold">Sold out</span>';
+    if (qty > 0) return `<div class="kx-step card" onclick="event.stopPropagation()">
+        <button aria-label="Less" onclick="UI.kioskQuickDec('${item.id}')">−</button><b>${qty}</b>
+        <button aria-label="More" onclick="UI.kioskQuickAdd('${item.id}')">＋</button></div>`;
+    return `<button class="kx-card-add" onclick="event.stopPropagation();UI.kioskQuickAdd('${item.id}')">＋ ${kt('add')}</button>`;
+  }
   function kioskCard(item, big) {
     const cat = S.getCategories().find((c) => c.id === item.cat) || {};
     const soldOut = item.available === false;
     const qty = kioskLineQty(item.id);
-    // After an item is in the cart the card itself becomes a stepper — so a
-    // standing customer adjusts quantity in place without opening the order.
-    const ctrl = soldOut
-      ? '<span class="kx-ctrl-sold">Sold out</span>'
-      : qty > 0
-        ? `<div class="kx-step card" onclick="event.stopPropagation()">
-             <button aria-label="Less" onclick="UI.kioskQuickDec('${item.id}')">−</button><b>${qty}</b>
-             <button aria-label="More" onclick="UI.kioskQuickAdd('${item.id}')">＋</button>
-           </div>`
-        : `<button class="kx-card-add" onclick="event.stopPropagation();UI.kioskQuickAdd('${item.id}')">＋ ${kt('add')}</button>`;
-    return `<div class="kx-item ${soldOut ? 'sold' : ''} ${big ? 'big' : ''} ${qty > 0 ? 'in-cart' : ''}" style="--accent:${cat.accent || '#c79a3f'}">
+    // The qty badge is always present (hidden at 0) so a tap can update it in
+    // place without rebuilding the whole grid — no image reload, no flicker.
+    return `<div class="kx-item ${soldOut ? 'sold' : ''} ${big ? 'big' : ''} ${qty > 0 ? 'in-cart' : ''}" data-id="${item.id}" style="--accent:${cat.accent || '#c79a3f'}">
       <button class="kx-item-tap" ${soldOut ? 'disabled aria-disabled="true"' : `onclick="UI.kioskOpenItem('${item.id}')"`}>
         <div class="kx-item-thumb">
           <img src="${esc(itemImage(item))}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">
-          ${qty > 0 ? `<span class="kx-qty-badge">${qty}</span>` : ''}
+          <span class="kx-qty-badge ${qty > 0 ? '' : 'kx-hide'}">${qty}</span>
           ${item.isCombo ? '<span class="kx-combo-tag">🎁 Combo</span>' : ''}
           ${soldOut ? '<span class="kx-soldtag">Sold out</span>' : ''}
         </div>
         <div class="kx-item-body"><span class="kx-item-name">${esc(item.name)}</span><span class="kx-item-price">${money(item.price)}</span></div>
       </button>
-      <div class="kx-item-ctrl">${ctrl}</div>
+      <div class="kx-item-ctrl">${kioskCardCtrl(item, qty, soldOut)}</div>
     </div>`;
+  }
+  // Surgically refresh just one card + the bottom bar (no full repaint).
+  function kioskSyncCard(itemId) {
+    const item = S.findItem(itemId); if (!item) return false;
+    const card = document.querySelector('.kx-item[data-id="' + itemId + '"]'); if (!card) return false;
+    const qty = kioskLineQty(itemId);
+    card.classList.toggle('in-cart', qty > 0);
+    const badge = card.querySelector('.kx-qty-badge');
+    if (badge) { badge.textContent = qty; badge.classList.toggle('kx-hide', qty <= 0); }
+    const ctrl = card.querySelector('.kx-item-ctrl');
+    if (ctrl) ctrl.innerHTML = kioskCardCtrl(item, qty, item.available === false);
+    return true;
+  }
+  function kioskSyncBar() {
+    const bar = document.querySelector('.kx-bottombar'); if (!bar) return;
+    const count = kioskItemCount();
+    bar.classList.toggle('show', count > 0);
+    const btn = bar.querySelector('.kx-bb-main'); if (btn) btn.disabled = !count;
+    const cnt = bar.querySelector('.kx-bb-count'); if (cnt) cnt.textContent = count;
+    const info = bar.querySelector('.kx-bb-info');
+    if (info) {
+      const label = count + ' ' + ((count === 1 && ui.kioskLang === 'en') ? 'item' : kt('items'));
+      info.innerHTML = `<b>${label}</b><span>${money(S.computeTotals(kioskCart).total)}</span>`;
+    }
   }
   function kioskHome() {
     const pops = kioskPopular(6);
