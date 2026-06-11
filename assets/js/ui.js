@@ -159,7 +159,7 @@
         ${right}
         <div class="tb-clock" id="tb-clock">${nowLabel()}</div>
         <button class="tb-cashier" onclick="UI.logout()" title="Log out">
-          <span class="dot ${ui.currentUser.role === 'admin' ? 'admin' : ''}"></span>${esc(ui.currentUser.name)} ⏻
+          <span class="dot ${ui.currentUser.role === 'admin' ? 'admin' : ''}"></span><span class="tb-cashier-name">${esc(ui.currentUser.name)}</span> ⏻
         </button>
       </div>`;
   }
@@ -286,7 +286,7 @@
           <span class="hub-desc">Back-screen the guest reads & pays by</span>
         </button>
         <button class="hub-tile kiosk-tile" onclick="UI.openKiosk()">
-          <span class="hub-ico">🌳</span>
+          <span class="hub-ico">🛎️</span>
           <span class="hub-label">Standing Order Tree</span>
           <span class="hub-desc">Self-order kiosk · ads, membership, queue tickets</span>
         </button>
@@ -3231,7 +3231,7 @@
     const c = S.getConfig();
     return `<header class="kx-bar">
       <button class="kx-brand" onclick="UI.kioskGo('home')">
-        ${c.logo ? `<img src="${esc(c.logo)}" alt="">` : '🌳'}<span>${esc(c.storeName)}</span>
+        ${c.logo ? `<img src="${esc(c.logo)}" alt="">` : '🛎️'}<span>${esc(c.storeName)}</span>
       </button>
       <div class="kx-bar-right">
         <div class="kx-lang" role="group" aria-label="Language">

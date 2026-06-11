@@ -1116,6 +1116,21 @@ body.login-view #topbar { display: none; }
   .pos-cart { display: none; }
   .menu-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
+/* iPhone / small phones — keep the top bar (and everything) inside the
+ * viewport so Safari renders at the right scale instead of zooming out. */
+@media (max-width: 480px) {
+  #topbar { padding: 0 10px; gap: 8px; }
+  .tb-left { min-width: 0; flex: 1 1 auto; gap: 8px; }
+  #topbar h1 { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #topbar .tb-tag { display: none; }
+  .tb-logo { width: 30px; height: 30px; }
+  .tb-right { gap: 6px; flex: 0 0 auto; }
+  .tb-action { padding: 8px 9px; font-size: 12px; }
+  .tb-cashier { padding: 7px 9px; font-size: 12px; gap: 5px; }
+  .tb-cashier-name { display: none; }   /* status dot + power icon are enough on a phone */
+  .menu-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .page-tools { flex-wrap: wrap; }      /* admin toolbars wrap instead of overflowing */
+}
 
 /* ---- Fallback for browsers without color-mix() (pre-2023) -------------- *
  * Categories still get their solid accent on borders, bands and active
